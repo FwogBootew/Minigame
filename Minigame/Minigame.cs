@@ -1,5 +1,4 @@
 ﻿using System;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
@@ -14,6 +13,24 @@ namespace Oxide.Plugins
     [Description("A Minigame plugin for Rust.")]
     public class Minigame : RustPlugin
     {
+        #region General
+
+
+
+        #endregion
+
+        #region PvPArena
+
+
+
+        #endregion
+
+        #region SurvivalArena
+
+
+
+        #endregion
+
         static int Map = 1;
         static int Level = 1;
         //public kit[][] kits = new kit[][] { };

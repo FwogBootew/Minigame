@@ -15,7 +15,27 @@ namespace Oxide.Plugins
     {
         #region General
 
+        public class Minigamer
+        {
+            BasePlayer player;
+            Game game;
+            public Minigamer(BasePlayer player, Game game)
+            {
+                this.game = game;
+                this.player = player;
+            }
+            public bool isInGame()
+            {
+                if (game != null) return true;
+                return false;
+            }
+        }
 
+        public class Game
+        {
+            string GameName;
+            List<BasePlayer> players;
+        }
 
         #endregion
 

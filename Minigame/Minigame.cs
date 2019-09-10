@@ -15,6 +15,7 @@ namespace Oxide.Plugins
     {
         #region General
 
+        #region Classes
         public class Minigamer
         {
             BasePlayer player;
@@ -33,9 +34,56 @@ namespace Oxide.Plugins
 
         public class Game
         {
-            string GameName;
-            List<BasePlayer> players;
+            public string GameName;
+            public List<BasePlayer> players;
+            virtual public void OnPlayerRespawn()
+            {
+
+            }
+            virtual public void OnPlayerDie()
+            {
+
+            }
+            virtual public BasePlayer.SpawnPoint getPlayerSpawn()
+            {
+                return new BasePlayer.SpawnPoint() { pos = new Vector3(), rot = new Quaternion() };
+            }
         }
+
+        public class PvPGame : Game
+        {
+            Vector3[] Spawns = new Vector3[]
+            {
+
+            };
+            public PvPGame()
+            {
+                GameName = "PvP";
+                players = new List<BasePlayer>();
+            }
+            public override BasePlayer.SpawnPoint getPlayerSpawn()
+            {
+                return new BasePlayer.SpawnPoint() { pos = GeneratePlayerSpawn(), rot = new Quaternion() };
+            }
+            private Vector3 GeneratePlayerSpawn()
+            {
+                return Spawns[new Random().Next(Spawns.Length)];
+            }
+        }
+
+        public class SurvivalGame : Game
+        {
+            public SurvivalGame()
+            {
+                GameName = "Survival";
+                players = new List<BasePlayer>();
+            }
+        }
+        #endregion
+
+        #region Variables
+
+        #endregion
 
         #endregion
 

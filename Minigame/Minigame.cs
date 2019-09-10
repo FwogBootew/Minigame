@@ -6,7 +6,7 @@ using Oxide.Core;
 using Oxide.Game.Rust.Cui;
 using UnityEngine;
 using Random = System.Random;
-
+//goodnight gamers
 namespace Oxide.Plugins
 {
     [Info("Minigame", "Fwog Bootew", 1.0)]

@@ -18,17 +18,32 @@ namespace Oxide.Plugins
         #region Classes
         public class Minigamer
         {
-            BasePlayer player;
-            Game game;
+            public static List<BasePlayer> players;
+            public BasePlayer player;
+            Game game = null;
             public Minigamer(BasePlayer player, Game game)
             {
                 this.game = game;
                 this.player = player;
+                players.Add(this.player);
+            }
+            ~Minigamer()
+            {
+                players.Remove(player);
             }
             public bool isInGame()
             {
                 if (game != null) return true;
                 return false;
+            }
+            public void leaveGame()
+            {
+                game.playerLeaveGame(player);
+                game = null;
+            }
+            public void joinGame(Game game)
+            {
+                this.game = game;
             }
         }
 
@@ -47,6 +62,23 @@ namespace Oxide.Plugins
             virtual public BasePlayer.SpawnPoint getPlayerSpawn()
             {
                 return new BasePlayer.SpawnPoint() { pos = new Vector3(), rot = new Quaternion() };
+            }
+            public void playerLeaveGame(BasePlayer player)
+            {
+                players.Remove(player);
+                broadcastToPlayers(string.Format(Lang["PlayerLeft"], player.displayName));
+            }
+            public void playerJoinGame(BasePlayer player)
+            {
+                players.Add(player);
+                broadcastToPlayers(string.Format(Lang["PlayerJoined"], player.displayName));
+            }
+            public void broadcastToPlayers(string msg)
+            {
+                foreach(var player in players)
+                {
+                    player.ChatMessage(msg);
+                }
             }
         }
 
@@ -83,13 +115,174 @@ namespace Oxide.Plugins
 
         #region Variables
 
+        List<Minigamer> Minigamers = new List<Minigamer>();
+        List<Game> Games = new List<Game>
+        {
+
+        };
+
+        #endregion
+
+        #region Commands
+
+        [ChatCommand("Join")]
+        void ccJoin(BasePlayer player, string msg, string[] args)
+        {
+            Minigamer minigamer = getMinigamer(player);
+            if (args.Length == 1)
+            {
+                foreach (var Game in Games)
+                {
+                    if (args[0].Contains(Game.GameName))
+                    {
+                        if (minigamer.isInGame()) minigamer.leaveGame();
+                        minigamer.joinGame(Game);
+                        return;
+                    }
+                }
+                player.ChatMessage(string.Format(Lang["BadGameName"], args[0]));
+            }
+            else
+            {
+                player.ChatMessage(Lang["BadArgs"]);
+            }
+        }
+        [ChatCommand("Leave")]
+        void ccLeave(BasePlayer player, string msg, string[] args)
+        {
+            Minigamer minigamer = getMinigamer(player);
+            if (!minigamer.isInGame())
+            {
+                player.ChatMessage(Lang["NotInGame"]);
+            }
+        }
+
+        #endregion
+
+        #region Methods
+
+        Minigamer getMinigamer(BasePlayer player)
+        {
+            foreach (var Minigamer in Minigamers)
+            {
+                if (Minigamer.player == player)
+                {
+                    return Minigamer;
+                }
+            }
+            return null;
+        }
+
+        bool isInGame(BasePlayer player)
+        {
+            foreach (var Minigamer in Minigamers)
+            {
+                if (Minigamer.player == player)
+                {
+                    if (Minigamer.isInGame()) return true;
+                    else return false;
+                }
+            }
+            return false;
+        }
+
+        #endregion
+
+        #region Data
+
+        public static Dictionary<string, string> Lang = new Dictionary<string, string>
+            {
+            //General
+            {"BadArgs", "Invalid Arguements."},
+            {"PlayerJoined", "{0} has joined the game!"},
+            {"PlayerLeft", "{0} has left the game."},
+            {"DebugOn", "Debug mode enabled."},
+            {"DebugOff", "Debug mode disabled."},
+            {"BadGameName", "Could not find game {0}, please try a different name. Do /Games to get a list of games."},
+            {"NotInGame", "You are not currently in a game."},
+            //Survival
+            {"DebugEnemyList", "The following are the entites in the enemies list: {0}."},
+            {"DebugWave", "Starting Wave {0} in {1} seconds."},
+            {"HasJoined", "You have already joined the game."},
+            {"DidJoin", "You have joined the game, please wait for the next one to start."},
+            {"DidLeave", "You have left the game."},
+            {"HasLeft", "You have not joined a game."},
+            {"NoUse", "You may not use this command."},
+            {"NewWave", "Beginning Wave {0}!"},
+            {"AllDead", "Wave over, all enemies have died. 60 Seconds until next Wave."},
+            {"GameOver", "All Players have died, game over."},
+            {"InGame", "You may not join, a game is already in session."},
+            {"Kicked", "You have been kicked from the game because you died, you must rejoin to play in the next game."},
+            {"SetTime", "Set Wave Time to {0} seconds."},
+            {"NoObject", "No Object."}
+            //PvP
+            
+            };
+
         #endregion
 
         #endregion
 
         #region PvPArena
 
+        #region Classes
 
+        public struct kit
+        {
+            Item[] attire;
+            Item[] meds;
+            Item[] weapons;
+            Item[] misc;
+            public string kitName;
+            int stackDivision;
+            public kit(Item[] attire, Item[] meds, Item[] weapons, Item[] misc, string kitName, int stackDivision = 1)
+            {
+                this.attire = attire;
+                this.meds = meds;
+                this.weapons = weapons;
+                this.misc = misc;
+                this.kitName = kitName;
+                this.stackDivision = stackDivision;
+            }
+            public void givePlayerKit(BasePlayer player)
+            {
+                foreach (Item item in attire)
+                {
+                    if (item != null)
+                    {
+                        ItemManager.CreateByItemID(item.info.itemid, item.amount).MoveToContainer(player.inventory.containerWear);
+                    }
+                }
+                foreach (Item item in weapons)
+                {
+
+                    if (item != null)
+                    {
+                        Item weapon = ItemManager.CreateByItemID(item.info.itemid, item.amount);
+                        (weapon.GetHeldEntity() as BaseProjectile).primaryMagazine.contents = (weapon.GetHeldEntity() as BaseProjectile).primaryMagazine.capacity;
+                        weapon.MoveToContainer(player.inventory.containerBelt);
+                        player.GiveItem(ItemManager.CreateByItemID((weapon.GetHeldEntity() as BaseProjectile).primaryMagazine.ammoType.itemid, ItemManager.CreateByItemID((weapon.GetHeldEntity() as BaseProjectile).primaryMagazine.ammoType.itemid).MaxStackable() / stackDivision));
+                    }
+
+                }
+                foreach (Item item in misc)
+                {
+                    if (item != null)
+                    {
+                        player.GiveItem(ItemManager.CreateByItemID(item.info.itemid, item.amount));
+                    }
+                }
+                foreach (Item item in meds)
+                {
+                    if (item != null)
+                    {
+                        player.GiveItem(ItemManager.CreateByItemID(item.info.itemid, item.amount));
+                    }
+                }
+            }
+        }
+
+        #endregion
 
         #endregion
 
@@ -175,60 +368,7 @@ namespace Oxide.Plugins
                 player.GiveItem(ItemManager.CreateByName("tactical.gloves", 1));
             }
         }
-        public struct kit
-        {
-            Item[] attire;
-            Item[] meds;
-            Item[] weapons;
-            Item[] misc;
-            public string kitName;
-            int stackDivision;
-            public kit(Item[] attire, Item[] meds, Item[] weapons, Item[] misc, string kitName, int stackDivision = 1)
-            {
-                this.attire = attire;
-                this.meds = meds;
-                this.weapons = weapons;
-                this.misc = misc;
-                this.kitName = kitName;
-                this.stackDivision = stackDivision;
-            }
-            public void givePlayerKit(BasePlayer player)
-            {
-                foreach (Item item in attire)
-                {
-                    if (item != null)
-                    {
-                        ItemManager.CreateByItemID(item.info.itemid, item.amount).MoveToContainer(player.inventory.containerWear);
-                    }
-                }
-                foreach (Item item in weapons)
-                {
-
-                    if (item != null)
-                    {
-                        Item weapon = ItemManager.CreateByItemID(item.info.itemid, item.amount);
-                        (weapon.GetHeldEntity() as BaseProjectile).primaryMagazine.contents = (weapon.GetHeldEntity() as BaseProjectile).primaryMagazine.capacity;
-                        weapon.MoveToContainer(player.inventory.containerBelt);
-                        player.GiveItem(ItemManager.CreateByItemID((weapon.GetHeldEntity() as BaseProjectile).primaryMagazine.ammoType.itemid, ItemManager.CreateByItemID((weapon.GetHeldEntity() as BaseProjectile).primaryMagazine.ammoType.itemid).MaxStackable() / stackDivision));
-                    }
-
-                }
-                foreach (Item item in misc)
-                {
-                    if (item != null)
-                    {
-                        player.GiveItem(ItemManager.CreateByItemID(item.info.itemid, item.amount));
-                    }
-                }
-                foreach (Item item in meds)
-                {
-                    if (item != null)
-                    {
-                        player.GiveItem(ItemManager.CreateByItemID(item.info.itemid, item.amount));
-                    }
-                }
-            }
-        }
+        
         redeem[] redeems = new redeem[]
         {
             new redeemL96(),
@@ -1704,27 +1844,6 @@ namespace Oxide.Plugins
 
             //Data
 
-            Dictionary<string, string> Lang = new Dictionary<string, string>
-            {
-            {"BadArgs", "Invalid Arguements."},
-            {"HasJoined", "You have already joined the game."},
-            {"DidJoin", "You have joined the game, please wait for the next one to start."},
-            {"DidLeave", "You have left the game."},
-            {"HasLeft", "You have not joined a game."},
-            {"NoUse", "You may not use this command."},
-            {"NewWave", "Beginning Wave {0}!"},
-            {"AllDead", "Wave over, all enemies have died. 60 Seconds until next Wave."},
-            {"GameOver", "All Players have died, game over."},
-            {"InGame", "You may not join, a game is already in session."},
-            {"PlayerJoined", "{0} has joined the game!"},
-            {"PlayerLeft", "{0} has left the game."},
-            {"Kicked", "You have been kicked from the game because you died, you must rejoin to play in the next game."},
-            {"DebugOn", "Debug mode enabled."},
-            {"DebugOff", "Debug mode disabled."},
-            {"DebugEnemyList", "The following are the entites in the enemies list: {0}."},
-            {"SetTime", "Set Wave Time to {0} seconds."},
-            {"NoObject", "No Object."},
-            {"DebugWave", "Starting Wave {0} in {1} seconds."}
-            };
+            
         }
     }

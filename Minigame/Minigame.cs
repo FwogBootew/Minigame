@@ -20,7 +20,7 @@ namespace Oxide.Plugins
         {
             public static List<BasePlayer> players;
             public BasePlayer player;
-            Game game = null;
+            public Game game = null;
             public Minigamer(BasePlayer player, Game game)
             {
                 this.game = game;
@@ -45,17 +45,25 @@ namespace Oxide.Plugins
             {
                 this.game = game;
             }
+            public BasePlayer.SpawnPoint getSpawn()
+            {
+                return game.getPlayerSpawn();
+            }
         }
 
         public class Game
         {
             public string GameName;
             public List<BasePlayer> players;
-            virtual public void OnPlayerRespawn()
+            virtual public Vector3 getSpawn()
+            {
+                return new Vector3();
+            }
+            virtual public void OnPlayerRespawn(BasePlayer player)
             {
 
             }
-            virtual public void OnPlayerDie()
+            virtual public void OnPlayerDie(BasePlayer player)
             {
 
             }
@@ -63,12 +71,12 @@ namespace Oxide.Plugins
             {
                 return new BasePlayer.SpawnPoint() { pos = new Vector3(), rot = new Quaternion() };
             }
-            public void playerLeaveGame(BasePlayer player)
+            virtual public void playerLeaveGame(BasePlayer player)
             {
                 players.Remove(player);
                 broadcastToPlayers(string.Format(Lang["PlayerLeft"], player.displayName));
             }
-            public void playerJoinGame(BasePlayer player)
+            virtual public void playerJoinGame(BasePlayer player)
             {
                 players.Add(player);
                 broadcastToPlayers(string.Format(Lang["PlayerJoined"], player.displayName));
@@ -79,6 +87,28 @@ namespace Oxide.Plugins
                 {
                     player.ChatMessage(msg);
                 }
+            }
+        }
+
+        public class HubGame : Game
+        {
+            public HubGame()
+            {
+                GameName = "PvP";
+                players = new List<BasePlayer>();
+            }
+            public override void playerLeaveGame(BasePlayer player)
+            {
+                players.Remove(player);
+            }
+            public override void playerJoinGame(BasePlayer player)
+            {
+                players.Add(player);
+            }
+            public override void OnPlayerRespawn(BasePlayer player)
+            {
+                player.inventory.Strip();
+                player.Heal(100.0f - player.health);
             }
         }
 
@@ -93,6 +123,11 @@ namespace Oxide.Plugins
                 GameName = "PvP";
                 players = new List<BasePlayer>();
             }
+            public override void OnPlayerRespawn(BasePlayer player)
+            {
+                player.inventory.Strip();
+                player.Heal(100.0f - player.health);
+            }
             public override BasePlayer.SpawnPoint getPlayerSpawn()
             {
                 return new BasePlayer.SpawnPoint() { pos = GeneratePlayerSpawn(), rot = new Quaternion() };
@@ -100,6 +135,10 @@ namespace Oxide.Plugins
             private Vector3 GeneratePlayerSpawn()
             {
                 return Spawns[new Random().Next(Spawns.Length)];
+            }
+            private kit GenerateKit()
+            {
+
             }
         }
 
@@ -118,7 +157,9 @@ namespace Oxide.Plugins
         List<Minigamer> Minigamers = new List<Minigamer>();
         List<Game> Games = new List<Game>
         {
-
+            new HubGame(),
+            new PvPGame(),
+            new SurvivalGame()
         };
 
         #endregion
@@ -218,6 +259,15 @@ namespace Oxide.Plugins
             //PvP
             
             };
+
+        #endregion
+
+        #region Hooks
+
+        object OnPlayerRespawn(BasePlayer player)
+        {
+            return getMinigamer(player).getSpawn();
+        }
 
         #endregion
 
@@ -616,10 +666,10 @@ namespace Oxide.Plugins
             PrintToChat("m");
             PrintToChat(kits[Level].Length.ToString());
         }
-        object OnPlayerRespawn(BasePlayer player)
+        /*object OnPlayerRespawn(BasePlayer player)
         {
             return new BasePlayer.SpawnPoint() { pos = getRandomSpawn(), rot = new Quaternion(0, 0, 0, 1) };
-        }
+        }*/
         void OnPlayerRespawned(BasePlayer player)
         {
             int Class;
@@ -1344,13 +1394,13 @@ namespace Oxide.Plugins
                 }
             }
 
-            object OnPlayerRespawn(BasePlayer player)
+            /*object OnPlayerRespawn(BasePlayer player)
             {
                 player.inventory.Strip();
                 player.Heal(100.0f - player.health);
                 Puts("OnPlayerRespawn works!");
                 return new BasePlayer.SpawnPoint() { pos = hubPos, rot = new Quaternion(0, 0, 0, 1) };
-            }
+            }*/
 
             void OnEntityKill(BaseNetworkable entity)
             {

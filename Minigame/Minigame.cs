@@ -82,11 +82,12 @@ namespace Oxide.Plugins
             public BasePlayer player;
             public Game game = null;
             //PvP
-            public Kit kit;
+            //public Kit kit;
+            public int Class;
             //Survival
             public Minigamer(BasePlayer player, Game game)
             {
-                this.kit = kits[3][0];
+                Class = 0;
                 this.game = game;
                 this.player = player;
                 players.Add(this.player);
@@ -174,6 +175,10 @@ namespace Oxide.Plugins
                 player.inventory.Strip();
                 player.Heal(100.0f - player.health);
             }
+            public override BasePlayer.SpawnPoint getPlayerSpawn()
+            {
+                return new BasePlayer.SpawnPoint() { pos = new Vector3(/*put position here*/), rot = new Quaternion()};
+            }
         }
 
         public class PvPGame : Game
@@ -213,6 +218,7 @@ namespace Oxide.Plugins
                 return kits[2][0];
             }
         }
+        /**/
 
         public class SurvivalGame : Game
         {
@@ -550,6 +556,17 @@ namespace Oxide.Plugins
 
         #region Methods
 
+        T readData<T>(string path)
+        {
+            return JsonConvert.DeserializeObject<T>(Interface.Oxide.DataFileSystem.ReadObject<string>(path));
+        }
+
+        void writeData<T>(T data, string path)
+        {
+            string dataString = JsonConvert.SerializeObject(data);
+            Interface.Oxide.DataFileSystem.WriteObject(path, dataString);
+        }
+
         Minigamer getMinigamer(BasePlayer player)
         {
             foreach (var Minigamer in Minigamers)
@@ -621,7 +638,6 @@ namespace Oxide.Plugins
         {
             redeems = redeems.OrderByDescending(m => m.requirement).ToArray();
             redeems.Reverse();
-            UpdatePlayers();
         }
 
         private void OnEntityEnter(TriggerBase trigger, BaseEntity entity)
@@ -636,6 +652,52 @@ namespace Oxide.Plugins
         object OnPlayerRespawn(BasePlayer player)
         {
             return getMinigamer(player).getSpawn();
+        }
+
+        void OnPlayerInit(BasePlayer player)
+        {
+            PrintToChat(player.displayName + " has joined!");
+        }
+        void OnPlayerDisconnected(BasePlayer player)
+        {
+            PrintToChat(player.displayName + " has left!");
+        }
+
+        void OnPlayerDie(BasePlayer player, HitInfo info)
+        {
+            BasePlayer attacker = info.InitiatorPlayer;
+            if (getMinigamer(attacker).game.GameName == "PvP" && getMinigamer(player).game.GameName == "PvP")
+            {
+                int Kills;
+                if (attacker != player)
+                {
+                    Kills = readData<int>("MinigameData/ArenaData" + attacker.displayName + "K");
+                    Kills += 1;
+                    string color = "55ff00";
+                    if (Kills < 3) color = "55ff00";
+                    else if (Kills < 5) color = "95ff00";
+                    else if (Kills < 8) color = "d4ff00";
+                    else if (Kills < 10) color = "ffea00";
+                    else if (Kills < 15) color = "ffaa00";
+                    else if (Kills < 25) color = "ff6a00";
+                    else if (Kills < 35) color = "ff4000";
+                    else if (Kills < 50) color = "ff2b00";
+                    else if (Kills < 100) color = "ff0000";
+                    else color = "303030";
+                    attacker.ChatMessage($"<color=#{color}>{Kills.ToString()}</color> Kills Killstreak");
+                    writeData<int>(Kills, "MinigameData/ArenaData/" + attacker.displayName + "K");
+                    foreach (redeem Redeem in redeems)
+                    {
+                        if (Kills == Redeem.requirement)
+                        {
+                            //Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + attacker.displayName + Redeem.name, GetPlayerRedeem(attacker, Redeem.name) + 1);
+                            writeData<int>(readData<int>("MinigameData/ArenaData/" + attacker.displayName + Redeem.name) + 1, "MinigameData/ArenaData" + attacker.displayName + Redeem.name);
+                            attacker.ChatMessage($"You got a new <color=#3195ff>{Redeem.name}</color> redeem for " + Kills.ToString() + " kills! Use /Redeem to use it!");
+                        }
+                    }
+                    writeData<int>(0, "MinigameData/ArenaData" + player.displayName + "K");
+                }
+            }
         }
 
         #endregion
@@ -668,9 +730,9 @@ namespace Oxide.Plugins
                     var isInt = int.TryParse(args[0], out RedeemID);
                     if (isInt && RedeemID <= redeems.Length && RedeemID > 0)
                     {
-                        if (GetPlayerRedeem(player, redeems[RedeemID - 1].name) > 0)
+                        if (readData<int>("MinigameData/ArenaData/" + player.displayName + redeems[RedeemID - 1].name) > 0)
                         {
-                            Interface.Oxide.DataFileSystem.WriteObject("MinigameData/PvPData/" + player.displayName + redeems[RedeemID - 1].name, GetPlayerRedeem(player, redeems[RedeemID - 1].name) - 1);
+                            Interface.Oxide.DataFileSystem.WriteObject("MinigameData/PvPData/" + player.displayName + redeems[RedeemID - 1].name, readData<int>("MinigameData/ArenaData/" + player.displayName + redeems[RedeemID - 1].name) - 0);
                             redeems[RedeemID - 1].givePlayerRedeem(player);
                             player.ChatMessage(string.Format(Lang["Redeemed"], redeems[RedeemID - 1].name));
                         }
@@ -728,18 +790,17 @@ namespace Oxide.Plugins
         [ChatCommand("Class")]
         void ChatCommandClass(BasePlayer player, string cmd, string[] args)
         {
-            if (args.Length == 0) player.ChatMessage(string.Format(Lang["CurrentClass"], kits[Level - 1][GetPlayerClass(player) - 1].kitName));
+            if (args.Length == 0) player.ChatMessage(string.Format(Lang["CurrentClass"], kits[2][readData<int>("MinigameData/ArenaData/" + player.displayName + "C") - 1].kitName));
             else if (args.Length > 1) player.ChatMessage(Lang["BadArgs"]);
             else
             {
                 int Class;
                 var isInt = int.TryParse(args[0], out Class);
-                if (isInt && Class <= kits[Level - 1].Length && Class > 0)
-                {
-                    string ClassString = JsonConvert.SerializeObject(Class);
-                    Interface.Oxide.DataFileSystem.WriteObject("MinigameData/PvPData/" + player.displayName, ClassString);
-                    getMinigamer(player).kit = kits[Level - 1][Class - 1];
-                    player.ChatMessage(string.Format(Lang["ChoseClass"], kits[Level - 1][Class - 1].kitName));
+                if (isInt && Class <= kits[2].Length && Class > 0)
+                { 
+                    writeData<int>(Class, "MinigameData/PvPData/" + player.displayName);
+                    getMinigamer(player).Class = Class;
+                    player.ChatMessage(string.Format(Lang["ChoseClass"], kits[2][Class - 1].kitName));
                 }
                 else player.ChatMessage(Lang["NotClass"]);
             }
@@ -757,7 +818,7 @@ namespace Oxide.Plugins
 
         #endregion
 
-        static int Map = 1;
+        /*static int Map = 1;
         static int Level = 1;
         //public kit[][] kits = new kit[][] { };
         
@@ -807,232 +868,46 @@ namespace Oxide.Plugins
             int Class;
             try
             {
-                Class = GetPlayerClass(player);
+                Class = readData<int>("MinigameData/ArenaData/" + player.displayName + "C");
             }
             catch (Exception exception)
             {
                 PrintToConsole(exception.ToString());
                 string ClassString = JsonConvert.SerializeObject("1");
                 Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + player.displayName, ClassString);
-                Class = GetPlayerClass(player);
+                Class = readData<int>("MinigameData/ArenaData/" + player.displayName + "C");
             }
             player.inventory.Strip();
-            kits[Level - 1][Class - 1].givePlayerKit(player);
+            kits[2][Class - 1].givePlayerKit(player);
             player.Heal(100f);
         }
         void OnPlayerSpawn(BasePlayer player)
         {
+            if ()
+            {
+
+            }
             {
                 int Class;
                 try
                 {
-                    Class = GetPlayerClass(player);
+                    Class = readData<int>("MinigameData/ArenaData/" + player.displayName + "C");
                 }
                 catch (Exception exception)
                 {
                     PrintToConsole(exception.ToString());
                     string ClassString = JsonConvert.SerializeObject("1");
                     Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + player.displayName, ClassString);
-                    Class = GetPlayerClass(player);
+                    Class = readData<int>("MinigameData/ArenaData/" + player.displayName + "C");
                 }
-                UpdatePlayers();
                 player.inventory.Strip();
-                kits[Level - 1][Class - 1].givePlayerKit(player);
+                kits[2][Class - 1].givePlayerKit(player);
                 player.Heal(100f);
             }
         }
-        void OnPlayerInit(BasePlayer player)
-        {
-            UpdatePlayers();
-            PrintToChat(player.displayName + " has joined!");
-            string ClassString = JsonConvert.SerializeObject("1");
-            Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + player.displayName, ClassString);
-            int Class = GetPlayerClass(player);
-        }
-        void OnPlayerDisconnected(BasePlayer player)
-        {
-            UpdatePlayers();
-            PrintToChat(player.displayName + " has left!");
-        }
-        Vector3 getRandomSpawn()
-        {
-            Random rand = new Random();
-            int randnum = rand.Next(8);
-            return maps[Map - 1][randnum];
-        }
-        int GetPlayerClass(BasePlayer player)
-        {
-            try
-            {
-                return JsonConvert.DeserializeObject<int>(Interface.Oxide.DataFileSystem.ReadObject<string>("ArenaData/" + player.displayName));
-            }
-            catch
-            {
-                Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + player.displayName, 1);
-                return JsonConvert.DeserializeObject<int>(Interface.Oxide.DataFileSystem.ReadObject<string>("ArenaData/" + player.displayName)); ;
-            }
+        
 
-        }
-        int GetPlayerRedeem(BasePlayer player, string redeem)
-        {
-            try
-            {
-                return JsonConvert.DeserializeObject<int>(Interface.Oxide.DataFileSystem.ReadObject<string>("ArenaData/" + player.displayName + redeem));
-            }
-            catch
-            {
-                Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + player.displayName + redeem, 0);
-                return 0;
-            }
-        }
-        void OnPlayerDie(BasePlayer player, HitInfo info)
-        {
-            BasePlayer attacker = info.InitiatorPlayer;
-            int Kills;
-            string KillsString;
-            if (attacker != player)
-            {
-                Kills = GetPlayerKills(attacker);
-                Kills += 1;
-                string color = "55ff00";
-                if (Kills < 3) color = "55ff00";
-                else if (Kills < 5) color = "95ff00";
-                else if (Kills < 8) color = "d4ff00";
-                else if (Kills < 10) color = "ffea00";
-                else if (Kills < 15) color = "ffaa00";
-                else if (Kills < 25) color = "ff6a00";
-                else if (Kills < 35) color = "ff4000";
-                else if (Kills < 50) color = "ff2b00";
-                else if (Kills < 100) color = "ff0000";
-                else color = "303030";
-                attacker.ChatMessage($"<color=#{color}>{Kills.ToString()}</color> Kills Killstreak");
-                KillsString = JsonConvert.SerializeObject(Kills);
-                Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + attacker.displayName + "K", KillsString);
-                foreach (redeem Redeem in redeems)
-                {
-                    if (Kills == Redeem.requirement)
-                    {
-                        Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + attacker.displayName + Redeem.name, GetPlayerRedeem(attacker, Redeem.name) + 1);
-                        attacker.ChatMessage($"You got a new <color=#3195ff>{Redeem.name}</color> redeem for " + Kills.ToString() + " kills! Use /Redeem to use it!");
-                    }
-                }
-                Kills = 0;
-                KillsString = JsonConvert.SerializeObject(Kills);
-                Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + player.displayName + "K", KillsString);
-                UpdatePlayers();
-            }
-        }
-        int GetPlayerKills(BasePlayer player)
-        {
-            try
-            {
-                return JsonConvert.DeserializeObject<int>(Interface.Oxide.DataFileSystem.ReadObject<string>("ArenaData/" + player.displayName + "K"));
-            }
-            catch
-            {
-                Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + player.displayName + "K", 0);
-                return JsonConvert.DeserializeObject<int>(Interface.Oxide.DataFileSystem.ReadObject<string>("ArenaData/" + player.displayName + "K")); ;
-            }
-
-        }
-        void BullyPlayer(BasePlayer player, int messageID)
-        {
-            switch (messageID)
-            {
-                case 0:
-                    player.ChatMessage("You do not have permission to use this command!");
-                    break;
-                case 1:
-                    player.ChatMessage("Incorrect use of this command!");
-                    break;
-            }
-        }
-
-        [ChatCommand("Help")]
-        void ChatCommandHelp(BasePlayer player, string command, string[] args)
-        {
-
-        }
-
-        [ChatCommand("SetMap")]
-        void ChatCommandSetMap(BasePlayer player, string command, string[] args)
-        {
-            if (player.IsAdmin)
-            {
-                if (args.Length != 1)
-                    BullyPlayer(player, 1);
-                else
-                {
-                    int level;
-                    var isInt = int.TryParse(args[0], out level);
-                    if (isInt && level <= maps.GetLength(0) && level > 0)
-                    {
-                        Map = level;
-                        switch (level)
-                        {
-                            case 1:
-                                player.ChatMessage("Set Map to Small-Trainyard.");
-                                break;
-                            case 2:
-                                player.ChatMessage("Set Map to Sand-Filled Mining Town.");
-                                break;
-                            case 3:
-                                player.ChatMessage("Set Map to Overgrown Junkyard.");
-                                break;
-
-                        }
-                        foreach (BasePlayer person in BasePlayer.activePlayerList)
-                        {
-                            person.DieInstantly();
-                        }
-                    }
-                    else
-                        BullyPlayer(player, 1);
-                }
-            }
-            else
-                BullyPlayer(player, 0);
-        }
-
-
-        [ChatCommand("SetLevel")]
-        void ChatCommandSetLevel(BasePlayer player, string command, string[] args)
-        {
-            if (player.IsAdmin)
-            {
-                if (args.Length != 1)
-                    BullyPlayer(player, 1);
-                else
-                {
-                    int level;
-                    var isInt = int.TryParse(args[0], out level);
-                    if (isInt && level <= kits.GetLength(0) && level > 0)
-                    {
-                        Level = level;
-                        player.ChatMessage("Set Gear-Level to " + level.ToString() + ".");
-                    }
-                    else
-                        BullyPlayer(player, 1);
-                }
-            }
-            else
-                BullyPlayer(player, 0);
-        }
-
-
-
-        [ChatCommand("GetXYZ")]
-        void ChatCommandGetXYZ(BasePlayer player, string command, string[] args)
-        {
-            if (player.IsAdmin)
-            {
-                String PlayerPos = player.ServerPosition.ToString();
-                player.ChatMessage(PlayerPos);
-            }
-            else
-                BullyPlayer(player, 0);
-        }
-        void UpdatePlayers()
+        /*void UpdatePlayers()
         {
             foreach (BasePlayer player in BasePlayer.activePlayerList as List<BasePlayer>)
             {
@@ -1081,24 +956,7 @@ namespace Oxide.Plugins
             }
             
             CuiHelper.AddUi(player, containerleaderboard);*/
-        }
-        [ChatCommand("SetKills")]
-        void ccSetKills(BasePlayer player, string command, string[] args)
-        {
-            if (args.Length != 1) BullyPlayer(player, 1);
-            else
-            {
-                int Kills;
-                var isInt = int.TryParse(args[0], out Kills);
-                if (isInt)
-                {
-                    string KillsString = JsonConvert.SerializeObject(Kills);
-                    Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + player.displayName + "K", KillsString);
-                }
-                else
-                    BullyPlayer(player, 1);
-            }
-        }
+        //}
 
         //Classes
 

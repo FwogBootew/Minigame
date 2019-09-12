@@ -204,6 +204,7 @@ namespace Oxide.Plugins
             {
                 player.inventory.Strip();
                 player.Heal(100.0f - player.health);
+                kits[2][getMinigamer(player).Class].givePlayerKit(player);
             }
             public override BasePlayer.SpawnPoint getPlayerSpawn()
             {
@@ -212,10 +213,6 @@ namespace Oxide.Plugins
             private Vector3 GeneratePlayerSpawn()
             {
                 return Spawns[new Random().Next(Spawns.Length)];
-            }
-            private Kit GeneratePlayerKit(BasePlayer player)
-            {
-                return kits[2][0];
             }
         }
         /**/
@@ -310,7 +307,7 @@ namespace Oxide.Plugins
 
         #region Variables
 
-        List<Minigamer> Minigamers = new List<Minigamer>();
+        private static List<Minigamer> Minigamers = new List<Minigamer>();
         List<Game> Games = new List<Game>
         {
             new HubGame(),
@@ -567,7 +564,7 @@ namespace Oxide.Plugins
             Interface.Oxide.DataFileSystem.WriteObject(path, dataString);
         }
 
-        Minigamer getMinigamer(BasePlayer player)
+        private static Minigamer getMinigamer(BasePlayer player)
         {
             foreach (var Minigamer in Minigamers)
             {
@@ -863,30 +860,9 @@ namespace Oxide.Plugins
         {
             return new BasePlayer.SpawnPoint() { pos = getRandomSpawn(), rot = new Quaternion(0, 0, 0, 1) };
         }*/
-        void OnPlayerRespawned(BasePlayer player)
+        /*void OnPlayerRespawned(BasePlayer player)
         {
-            int Class;
-            try
-            {
-                Class = readData<int>("MinigameData/ArenaData/" + player.displayName + "C");
-            }
-            catch (Exception exception)
-            {
-                PrintToConsole(exception.ToString());
-                string ClassString = JsonConvert.SerializeObject("1");
-                Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + player.displayName, ClassString);
-                Class = readData<int>("MinigameData/ArenaData/" + player.displayName + "C");
-            }
-            player.inventory.Strip();
-            kits[2][Class - 1].givePlayerKit(player);
-            player.Heal(100f);
-        }
-        void OnPlayerSpawn(BasePlayer player)
-        {
-            if ()
-            {
-
-            }
+            if (getMinigamer(player).game.GameName == "PvP")
             {
                 int Class;
                 try
@@ -901,8 +877,18 @@ namespace Oxide.Plugins
                     Class = readData<int>("MinigameData/ArenaData/" + player.displayName + "C");
                 }
                 player.inventory.Strip();
-                kits[2][Class - 1].givePlayerKit(player);
                 player.Heal(100f);
+                kits[2][Class - 1].givePlayerKit(player);
+            }
+            
+        }*/
+        void OnPlayerSpawn(BasePlayer player)
+        {
+            writeData<int>(0, "MinigameData/ArenaData/" + player.displayName + "C");
+            writeData<int>(0, "MinigameData/ArenaData/" + player.displayName + "K");
+            foreach(var redeem in redeems)
+            {
+                writeData<int>(0, "MinigameData/ArenaData/" + player.displayName + redeem.name);
             }
         }
         

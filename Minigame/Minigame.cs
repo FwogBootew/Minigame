@@ -15,14 +15,78 @@ namespace Oxide.Plugins
     {
         #region General
 
+        #region Structs
+
+        public struct Kit
+        {
+            Item[] attire;
+            Item[] meds;
+            Item[] weapons;
+            Item[] misc;
+            public string kitName;
+            int stackDivision;
+            public Kit(Item[] attire, Item[] meds, Item[] weapons, Item[] misc, string kitName, int stackDivision = 1)
+            {
+                this.attire = attire;
+                this.meds = meds;
+                this.weapons = weapons;
+                this.misc = misc;
+                this.kitName = kitName;
+                this.stackDivision = stackDivision;
+            }
+            public void givePlayerKit(BasePlayer player)
+            {
+                foreach (Item item in attire)
+                {
+                    if (item != null)
+                    {
+                        ItemManager.CreateByItemID(item.info.itemid, item.amount).MoveToContainer(player.inventory.containerWear);
+                    }
+                }
+                foreach (Item item in weapons)
+                {
+
+                    if (item != null)
+                    {
+                        Item weapon = ItemManager.CreateByItemID(item.info.itemid, item.amount);
+                        (weapon.GetHeldEntity() as BaseProjectile).primaryMagazine.contents = (weapon.GetHeldEntity() as BaseProjectile).primaryMagazine.capacity;
+                        weapon.MoveToContainer(player.inventory.containerBelt);
+                        player.GiveItem(ItemManager.CreateByItemID((weapon.GetHeldEntity() as BaseProjectile).primaryMagazine.ammoType.itemid, ItemManager.CreateByItemID((weapon.GetHeldEntity() as BaseProjectile).primaryMagazine.ammoType.itemid).MaxStackable() / stackDivision));
+                    }
+
+                }
+                foreach (Item item in misc)
+                {
+                    if (item != null)
+                    {
+                        player.GiveItem(ItemManager.CreateByItemID(item.info.itemid, item.amount));
+                    }
+                }
+                foreach (Item item in meds)
+                {
+                    if (item != null)
+                    {
+                        player.GiveItem(ItemManager.CreateByItemID(item.info.itemid, item.amount));
+                    }
+                }
+            }
+        }
+
+        #endregion
+
         #region Classes
         public class Minigamer
         {
+            //General
             public static List<BasePlayer> players;
             public BasePlayer player;
             public Game game = null;
+            //PvP
+            public Kit kit;
+            //Survival
             public Minigamer(BasePlayer player, Game game)
             {
+                this.kit = kits[3][0];
                 this.game = game;
                 this.player = player;
                 players.Add(this.player);
@@ -94,7 +158,7 @@ namespace Oxide.Plugins
         {
             public HubGame()
             {
-                GameName = "PvP";
+                GameName = "Hub";
                 players = new List<BasePlayer>();
             }
             public override void playerLeaveGame(BasePlayer player)
@@ -116,7 +180,15 @@ namespace Oxide.Plugins
         {
             Vector3[] Spawns = new Vector3[]
             {
-
+                new Vector3(-34, 21f, 35.2f),
+                new Vector3(-6.8f, 21f, 54.2f),
+                new Vector3(5.8f, 21f, 2f),
+                new Vector3(-7.7f, 21f, -10.6f),
+                new Vector3(-33f, 22f, -2.3f),
+                new Vector3(4.5f, 21f, 24.8f),
+                new Vector3(6f, 21f, 40.2f),
+                new Vector3(-38f, 20f, 5.2f),
+                new Vector3(5.7f, 21f, -9.8f)
             };
             public PvPGame()
             {
@@ -136,9 +208,9 @@ namespace Oxide.Plugins
             {
                 return Spawns[new Random().Next(Spawns.Length)];
             }
-            private kit GenerateKit()
+            private Kit GeneratePlayerKit(BasePlayer player)
             {
-
+                return kits[2][0];
             }
         }
 
@@ -150,6 +222,84 @@ namespace Oxide.Plugins
                 players = new List<BasePlayer>();
             }
         }
+
+        public class redeem
+        {
+            public string name;
+            public int requirement;
+            public redeem()
+            {
+
+            }
+            public virtual void givePlayerRedeem(BasePlayer player)
+            {
+
+            }
+        }
+
+        public class redeemM249 : redeem
+        {
+            public redeemM249()
+            {
+                name = "m249";
+                requirement = 10;
+            }
+            public override void givePlayerRedeem(BasePlayer player)
+            {
+                Item item = ItemManager.CreateByName("lmg.m249", 1, 1712378771);
+                (item.GetHeldEntity() as BaseProjectile).primaryMagazine.contents = (item.GetHeldEntity() as BaseProjectile).primaryMagazine.capacity;
+                player.GiveItem(item);
+            }
+        }
+
+        public class redeemL96 : redeem
+        {
+            public redeemL96()
+            {
+                name = "l96";
+                requirement = 5;
+            }
+            public override void givePlayerRedeem(BasePlayer player)
+            {
+                //weapon.mod.8x.scope
+                Item item = ItemManager.CreateByName("rifle.l96", 1);
+                (item.GetHeldEntity() as BaseProjectile).primaryMagazine.contents = (item.GetHeldEntity() as BaseProjectile).primaryMagazine.capacity;
+                item.GetHeldEntity().GiveItem(ItemManager.CreateByName("weapon.mod.8x.scope", 1));
+                player.GiveItem(item);
+                player.GiveItem(ItemManager.CreateByName("weapon.mod.8x.scope", 1));
+            }
+        }
+
+        public class redeemLauncher : redeem
+        {
+            public redeemLauncher()
+            {
+                name = "launcher";
+                requirement = 7;
+            }
+            public override void givePlayerRedeem(BasePlayer player)
+            {
+                //weapon.mod.8x.scope
+                Item item = ItemManager.CreateByName("rocket.launcher", 1);
+                (item.GetHeldEntity() as BaseProjectile).primaryMagazine.contents = (item.GetHeldEntity() as BaseProjectile).primaryMagazine.capacity;
+                player.GiveItem(item);
+                player.GiveItem(ItemManager.CreateByName("ammo.rocket.basic", 3));
+            }
+        }
+
+        public class redeemGloves : redeem
+        {
+            public redeemGloves()
+            {
+                name = "gloves";
+                requirement = 3;
+            }
+            public override void givePlayerRedeem(BasePlayer player)
+            {
+                player.GiveItem(ItemManager.CreateByName("tactical.gloves", 1));
+            }
+        }
+
         #endregion
 
         #region Variables
@@ -161,6 +311,204 @@ namespace Oxide.Plugins
             new PvPGame(),
             new SurvivalGame()
         };
+
+        
+
+        public static Kit[][] kits = new Kit[][]
+{
+            //Level-1
+            new Kit[]
+        {
+            new Kit
+            (
+                new Item[] { ItemManager.CreateByName("", 1) },
+                new Item[] { ItemManager.CreateByName("bandage", 3) },
+                new Item[] { ItemManager.CreateByName("", 1) },
+                new Item[] { ItemManager.CreateByName("spear.stone", 1), ItemManager.CreateByName("spear.stone", 1), ItemManager.CreateByName("spear.stone", 1) },
+                "Soldier"
+            ),
+            new Kit
+            (
+                new Item[] { ItemManager.CreateByName("", 1) },
+                new Item[] { ItemManager.CreateByName("bandage", 3) },
+                new Item[] { ItemManager.CreateByName("", 1) },
+                new Item[] { ItemManager.CreateByName("", 1)  },
+                "CQB",
+                4
+            ),
+            new Kit
+            (
+                new Item[] { ItemManager.CreateByName("", 1) },
+                new Item[] { ItemManager.CreateByName("bandage", 3) },
+                new Item[] { ItemManager.CreateByName("pistol.nailgun", 1) },
+                new Item[] { ItemManager.CreateByName("", 1) },
+                "Rouge"
+            ),
+            new Kit
+            (
+                new Item[] { ItemManager.CreateByName("", 1) },
+                new Item[] { ItemManager.CreateByName("bandage", 3) },
+                new Item[] { ItemManager.CreateByName("bow.hunting", 1) },
+                new Item[] { ItemManager.CreateByName("", 1) },
+                "Scout",
+                4
+            )
+        },
+            //Level-2
+            new Kit[]
+        {
+            new Kit
+            (
+                new Item[] { ItemManager.CreateByName("bone.armor.suit", 1) },
+                new Item[] { ItemManager.CreateByName("bandage", 3) },
+                new Item[] { ItemManager.CreateByName("bow.hunting", 1) },
+                new Item[] { ItemManager.CreateByName("", 1) },
+                "Soldier"
+            ),
+            new Kit
+            (
+                new Item[] { ItemManager.CreateByName("bone.armor.suit", 1) },
+                new Item[] { ItemManager.CreateByName("bandage", 3) },
+                new Item[] { ItemManager.CreateByName("shotgun.waterpipe", 1) },
+                new Item[] { ItemManager.CreateByName("", 1) },
+                "CQB",
+                4
+            ),
+            new Kit
+            (
+                new Item[] { ItemManager.CreateByName("", 1) },
+                new Item[] { ItemManager.CreateByName("bandage", 3) },
+                new Item[] { ItemManager.CreateByName("pistol.eoka", 1) },
+                new Item[] { ItemManager.CreateByName("knife.combat", 1) },
+                "Rouge",
+                4
+            ),
+            new Kit
+            (
+                new Item[] { ItemManager.CreateByName("", 1) },
+                new Item[] { ItemManager.CreateByName("bandage", 3) },
+                new Item[] { ItemManager.CreateByName("crossbow", 1) },
+                new Item[] { ItemManager.CreateByName("", 1) },
+                "Scout",
+                4
+            )
+        },
+            //Level-3
+            new Kit[]
+        {
+            new Kit
+            (
+                new Item[] { ItemManager.CreateByName("roadsign.jacket", 1), ItemManager.CreateByName("coffeecan.helmet", 1), ItemManager.CreateByName("roadsign.kilt", 1), ItemManager.CreateByName("roadsign.gloves", 1), ItemManager.CreateByName("shoes.boots", 1), ItemManager.CreateByName("hoodie", 1), ItemManager.CreateByName("pants", 1) },
+                new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
+                new Item[] { ItemManager.CreateByName("smg.thompson", 1) },
+                new Item[] { ItemManager.CreateByName("", 1) },
+                "Soldier"
+            ),
+            new Kit
+            (
+                new Item[] { ItemManager.CreateByName("roadsign.jacket", 1), ItemManager.CreateByName("coffeecan.helmet", 1), ItemManager.CreateByName("roadsign.kilt", 1), ItemManager.CreateByName("roadsign.gloves", 1), ItemManager.CreateByName("shoes.boots", 1), ItemManager.CreateByName("hoodie", 1), ItemManager.CreateByName("pants", 1) },
+                new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
+                new Item[] { ItemManager.CreateByName("smg.2", 1), ItemManager.CreateByName("shotgun.double", 1) },
+                new Item[] { ItemManager.CreateByName("", 1) },
+                "CQB",
+                2
+            ),
+            new Kit
+            (
+                new Item[] { ItemManager.CreateByName("hazmatsuit", 1) },
+                new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
+                new Item[] { ItemManager.CreateByName("pistol.semiauto", 1) },
+                new Item[] { ItemManager.CreateByName("grenade.beancan", 5) },
+                "Rouge"
+            ),
+            new Kit
+            (
+                new Item[] { ItemManager.CreateByName("hazmatsuit", 1) },
+                new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
+                new Item[] { ItemManager.CreateByName("rifle.semiauto", 1) },
+                new Item[] { ItemManager.CreateByName("", 1) },
+                "Scout"
+            )
+        },
+            //Level-4
+            new Kit[]
+        {
+            new Kit
+            (
+                new Item[] { ItemManager.CreateByName("metal.plate.torso", 1), ItemManager.CreateByName("metal.facemask", 1), ItemManager.CreateByName("roadsign.kilt", 1), ItemManager.CreateByName("roadsign.gloves", 1), ItemManager.CreateByName("shoes.boots", 1), ItemManager.CreateByName("hoodie", 1), ItemManager.CreateByName("pants", 1) },
+                new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
+                new Item[] { ItemManager.CreateByName("rifle.ak", 1) },
+                new Item[] { ItemManager.CreateByName("", 1) },
+                "Soldier"
+            ),
+            new Kit
+            (
+                new Item[] { ItemManager.CreateByName("metal.plate.torso", 1), ItemManager.CreateByName("metal.facemask", 1), ItemManager.CreateByName("roadsign.kilt", 1), ItemManager.CreateByName("roadsign.gloves", 1), ItemManager.CreateByName("shoes.boots", 1), ItemManager.CreateByName("hoodie", 1), ItemManager.CreateByName("pants", 1) },
+                new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
+                new Item[] { ItemManager.CreateByName("shotgun.pump", 1), ItemManager.CreateByName("smg.2", 1) },
+                new Item[] { ItemManager.CreateByName("", 1) },
+                "CQB",
+                2
+            ),
+            new Kit
+            (
+                new Item[] { ItemManager.CreateByName("roadsign.jacket", 1), ItemManager.CreateByName("metal.facemask", 1), ItemManager.CreateByName("roadsign.kilt", 1), ItemManager.CreateByName("roadsign.gloves", 1), ItemManager.CreateByName("shoes.boots", 1), ItemManager.CreateByName("hoodie", 1), ItemManager.CreateByName("pants", 1) },
+                new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
+                new Item[] { ItemManager.CreateByName("pistol.python", 1), ItemManager.CreateByName("crossbow", 1) },
+                new Item[] { ItemManager.CreateByName("grenade.f1", 5), ItemManager.CreateByName("arrow.fire", 5) },
+                "Rouge",
+                4
+            ),
+            new Kit
+            (
+                new Item[] { ItemManager.CreateByName("roadsign.jacket", 1), ItemManager.CreateByName("metal.facemask", 1), ItemManager.CreateByName("roadsign.kilt", 1), ItemManager.CreateByName("tactical.gloves", 1), ItemManager.CreateByName("shoes.boots", 1), ItemManager.CreateByName("hoodie", 1), ItemManager.CreateByName("pants", 1) },
+                new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
+                new Item[] { ItemManager.CreateByName("rifle.bolt", 1), ItemManager.CreateByName("pistol.semiauto", 1) },
+                new Item[] { ItemManager.CreateByName("weapon.mod.small.scope", 1) },
+                "Scout",
+                4
+            )
+        },
+            //Level-5
+            new Kit[]
+        {
+            new Kit
+            (
+                new Item[] { ItemManager.CreateByName("metal.plate.torso", 1, 797410767), ItemManager.CreateByName("metal.facemask", 1, 784316334), ItemManager.CreateByName("roadsign.kilt", 1, 1442346890), ItemManager.CreateByName("roadsign.gloves", 1), ItemManager.CreateByName("shoes.boots", 1, 10023), ItemManager.CreateByName("hoodie", 1, 14179), ItemManager.CreateByName("pants", 1, 1406835139) },
+                new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
+                new Item[] { ItemManager.CreateByName("rifle.lr300", 1, 1741459108) },
+                new Item[] { ItemManager.CreateByName("", 1) },
+                "Soldier"
+            ),
+            new Kit
+            (
+                new Item[] { ItemManager.CreateByName("metal.plate.torso", 1, 797410767), ItemManager.CreateByName("metal.facemask", 1, 784316334), ItemManager.CreateByName("roadsign.kilt", 1, 1442346890), ItemManager.CreateByName("roadsign.gloves", 1), ItemManager.CreateByName("shoes.boots", 1, 10023), ItemManager.CreateByName("hoodie", 1, 14179), ItemManager.CreateByName("pants", 1, 1406835139) },
+                new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
+                new Item[] { ItemManager.CreateByName("shotgun.spas12", 1), ItemManager.CreateByName("smg.mp5", 1) },
+                new Item[] { ItemManager.CreateByName("", 1) },
+                "CQB",
+                2
+            ),
+            new Kit
+            (
+                new Item[] { ItemManager.CreateByName("metal.plate.torso", 1, 797410767), ItemManager.CreateByName("metal.facemask", 1, 784316334), ItemManager.CreateByName("roadsign.kilt", 1, 1442346890), ItemManager.CreateByName("roadsign.gloves", 1), ItemManager.CreateByName("shoes.boots", 1, 10023), ItemManager.CreateByName("hoodie", 1, 14179), ItemManager.CreateByName("pants", 1, 1406835139) },
+                new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
+                new Item[] { ItemManager.CreateByName("smg.mp5", 1), ItemManager.CreateByName("pistol.m92", 1) },
+                new Item[] { ItemManager.CreateByName("grenade.f1", 5)},
+                "Rouge",
+                2
+            ),
+            new Kit
+            (
+                new Item[] { ItemManager.CreateByName("metal.plate.torso", 1, 797410767), ItemManager.CreateByName("metal.facemask", 1, 784316334), ItemManager.CreateByName("roadsign.kilt", 1, 1442346890), ItemManager.CreateByName("roadsign.gloves", 1), ItemManager.CreateByName("shoes.boots", 1, 10023), ItemManager.CreateByName("hoodie", 1, 14179), ItemManager.CreateByName("pants", 1, 1406835139) },
+                new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
+                new Item[] { ItemManager.CreateByName("rifle.m39", 1), ItemManager.CreateByName("pistol.m92", 1) },
+                new Item[] { ItemManager.CreateByName("weapon.mod.small.scope", 1) },
+                "Scout",
+                2
+            )
+        }
+};
 
         #endregion
 
@@ -255,14 +603,35 @@ namespace Oxide.Plugins
             {"InGame", "You may not join, a game is already in session."},
             {"Kicked", "You have been kicked from the game because you died, you must rejoin to play in the next game."},
             {"SetTime", "Set Wave Time to {0} seconds."},
-            {"NoObject", "No Object."}
+            {"NoObject", "No Object."},
             //PvP
-            
+            {"NoRedeem", "You do not have any of those redeems."},
+            {"Redeemed", "You succesfully redeemed {0}."},
+            {"ChoseClass", "You've chosen class {0}."},
+            {"CurrentClass", "You're currently class {0}."},
+            {"NotClass", "That isn't a class."},
+
             };
 
         #endregion
 
         #region Hooks
+
+        public void Loaded()
+        {
+            redeems = redeems.OrderByDescending(m => m.requirement).ToArray();
+            redeems.Reverse();
+            UpdatePlayers();
+        }
+
+        private void OnEntityEnter(TriggerBase trigger, BaseEntity entity)
+        {
+            /*if (!(trigger is TriggerSafeZone) && !(entity is BasePlayer)) return;
+            var safeZone = trigger as TriggerSafeZone;
+            if (safeZone == null) return;
+
+            safeZone.enabled = !disableCompoundTrigger;*/
+        }
 
         object OnPlayerRespawn(BasePlayer player)
         {
@@ -275,62 +644,108 @@ namespace Oxide.Plugins
 
         #region PvPArena
 
-        #region Classes
+        #region Variables
 
-        public struct kit
+        redeem[] redeems = new redeem[]
         {
-            Item[] attire;
-            Item[] meds;
-            Item[] weapons;
-            Item[] misc;
-            public string kitName;
-            int stackDivision;
-            public kit(Item[] attire, Item[] meds, Item[] weapons, Item[] misc, string kitName, int stackDivision = 1)
+            new redeemL96(),
+            new redeemLauncher(),
+            new redeemGloves(),
+            new redeemM249()
+        };
+
+        #region Commands
+
+        [ChatCommand("Redeem")]
+        void ChatCommandRedeem(BasePlayer player, string command, string[] args)
+        {
+            if (getMinigamer(player).game.GameName == "PvP")
             {
-                this.attire = attire;
-                this.meds = meds;
-                this.weapons = weapons;
-                this.misc = misc;
-                this.kitName = kitName;
-                this.stackDivision = stackDivision;
+                if (args.Length != 1) player.ChatMessage(Lang["BadArgs"]);
+                else
+                {
+                    int RedeemID;
+                    var isInt = int.TryParse(args[0], out RedeemID);
+                    if (isInt && RedeemID <= redeems.Length && RedeemID > 0)
+                    {
+                        if (GetPlayerRedeem(player, redeems[RedeemID - 1].name) > 0)
+                        {
+                            Interface.Oxide.DataFileSystem.WriteObject("MinigameData/PvPData/" + player.displayName + redeems[RedeemID - 1].name, GetPlayerRedeem(player, redeems[RedeemID - 1].name) - 1);
+                            redeems[RedeemID - 1].givePlayerRedeem(player);
+                            player.ChatMessage(string.Format(Lang["Redeemed"], redeems[RedeemID - 1].name));
+                        }
+                        else player.ChatMessage(Lang["NoRedeem"]);
+                    }
+                }
             }
-            public void givePlayerKit(BasePlayer player)
+            /*else if (args.Length == 0)
             {
-                foreach (Item item in attire)
+                string msg = "You have";
+                List<string> redeemstrings = new List<string>();
+                foreach (redeem Redeem in redeems)
                 {
-                    if (item != null)
+                    if (GetPlayerRedeem(player, Redeem.name) > 0)
                     {
-                        ItemManager.CreateByItemID(item.info.itemid, item.amount).MoveToContainer(player.inventory.containerWear);
+                        msg += $", {GetPlayerRedeem(player, Redeem.name)} {Redeem.name}";
                     }
                 }
-                foreach (Item item in weapons)
+                player.ChatMessage(msg.Remove(msg.IndexOf(','), 1) + " redeems.");
+            }
+            else
+            {
+                int RedeemID;
+                var isInt = int.TryParse(args[0], out RedeemID);
+                if (isInt && RedeemID <= redeems.Length && RedeemID > 0)
                 {
+                    if (GetPlayerRedeem(player, redeems[RedeemID - 1].name) > 0)
+                    {
+                        Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + player.displayName + redeems[RedeemID - 1].name, GetPlayerRedeem(player, redeems[RedeemID - 1].name) - 1);
+                        redeems[RedeemID - 1].givePlayerRedeem(player);
+                        player.ChatMessage("You've redeemed " + redeems[RedeemID - 1].name + "!");
+                    }
+                    else player.ChatMessage("You do not have any of those redeems!");
+                }
+                else
+                {
+                    foreach (redeem Redeem in redeems)
+                    {
+                        if (Redeem.name == args[0])
+                        {
+                            if (GetPlayerRedeem(player, Redeem.name) > 0)
+                            {
+                                Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + player.displayName + Redeem.name, GetPlayerRedeem(player, Redeem.name) - 1);
+                                Redeem.givePlayerRedeem(player);
+                                player.ChatMessage("You've redeemed " + Redeem.name + "!");
+                                return;
+                            }
+                        }
+                    }
+                    BullyPlayer(player, 1);
+                }
+            }*/
+        }
 
-                    if (item != null)
-                    {
-                        Item weapon = ItemManager.CreateByItemID(item.info.itemid, item.amount);
-                        (weapon.GetHeldEntity() as BaseProjectile).primaryMagazine.contents = (weapon.GetHeldEntity() as BaseProjectile).primaryMagazine.capacity;
-                        weapon.MoveToContainer(player.inventory.containerBelt);
-                        player.GiveItem(ItemManager.CreateByItemID((weapon.GetHeldEntity() as BaseProjectile).primaryMagazine.ammoType.itemid, ItemManager.CreateByItemID((weapon.GetHeldEntity() as BaseProjectile).primaryMagazine.ammoType.itemid).MaxStackable() / stackDivision));
-                    }
-
-                }
-                foreach (Item item in misc)
+        [ChatCommand("Class")]
+        void ChatCommandClass(BasePlayer player, string cmd, string[] args)
+        {
+            if (args.Length == 0) player.ChatMessage(string.Format(Lang["CurrentClass"], kits[Level - 1][GetPlayerClass(player) - 1].kitName));
+            else if (args.Length > 1) player.ChatMessage(Lang["BadArgs"]);
+            else
+            {
+                int Class;
+                var isInt = int.TryParse(args[0], out Class);
+                if (isInt && Class <= kits[Level - 1].Length && Class > 0)
                 {
-                    if (item != null)
-                    {
-                        player.GiveItem(ItemManager.CreateByItemID(item.info.itemid, item.amount));
-                    }
+                    string ClassString = JsonConvert.SerializeObject(Class);
+                    Interface.Oxide.DataFileSystem.WriteObject("MinigameData/PvPData/" + player.displayName, ClassString);
+                    getMinigamer(player).kit = kits[Level - 1][Class - 1];
+                    player.ChatMessage(string.Format(Lang["ChoseClass"], kits[Level - 1][Class - 1].kitName));
                 }
-                foreach (Item item in meds)
-                {
-                    if (item != null)
-                    {
-                        player.GiveItem(ItemManager.CreateByItemID(item.info.itemid, item.amount));
-                    }
-                }
+                else player.ChatMessage(Lang["NotClass"]);
             }
         }
+
+        #endregion
 
         #endregion
 
@@ -345,283 +760,7 @@ namespace Oxide.Plugins
         static int Map = 1;
         static int Level = 1;
         //public kit[][] kits = new kit[][] { };
-        public class redeem
-        {
-            public string name;
-            public int requirement;
-            public redeem()
-            {
-
-            }
-            public virtual void givePlayerRedeem(BasePlayer player)
-            {
-
-            }
-        }
-        public class redeemM249 : redeem
-        {
-            public redeemM249()
-            {
-                name = "m249";
-                requirement = 10;
-            }
-            public override void givePlayerRedeem(BasePlayer player)
-            {
-                Item item = ItemManager.CreateByName("lmg.m249", 1, 1712378771);
-                (item.GetHeldEntity() as BaseProjectile).primaryMagazine.contents = (item.GetHeldEntity() as BaseProjectile).primaryMagazine.capacity;
-                player.GiveItem(item);
-            }
-        }
-        public class redeemL96 : redeem
-        {
-            public redeemL96()
-            {
-                name = "l96";
-                requirement = 5;
-            }
-            public override void givePlayerRedeem(BasePlayer player)
-            {
-                //weapon.mod.8x.scope
-                Item item = ItemManager.CreateByName("rifle.l96", 1);
-                (item.GetHeldEntity() as BaseProjectile).primaryMagazine.contents = (item.GetHeldEntity() as BaseProjectile).primaryMagazine.capacity;
-                item.GetHeldEntity().GiveItem(ItemManager.CreateByName("weapon.mod.8x.scope", 1));
-
-                player.GiveItem(item);
-                player.GiveItem(ItemManager.CreateByName("weapon.mod.8x.scope", 1));
-            }
-        }
-        public class redeemLauncher : redeem
-        {
-            public redeemLauncher()
-            {
-                name = "launcher";
-                requirement = 7;
-            }
-            public override void givePlayerRedeem(BasePlayer player)
-            {
-                //weapon.mod.8x.scope
-                Item item = ItemManager.CreateByName("rocket.launcher", 1);
-                (item.GetHeldEntity() as BaseProjectile).primaryMagazine.contents = (item.GetHeldEntity() as BaseProjectile).primaryMagazine.capacity;
-                player.GiveItem(item);
-                player.GiveItem(ItemManager.CreateByName("ammo.rocket.basic", 3));
-            }
-        }
-        public class redeemGloves : redeem
-        {
-            public redeemGloves()
-            {
-                name = "gloves";
-                requirement = 3;
-            }
-            public override void givePlayerRedeem(BasePlayer player)
-            {
-                player.GiveItem(ItemManager.CreateByName("tactical.gloves", 1));
-            }
-        }
         
-        redeem[] redeems = new redeem[]
-        {
-            new redeemL96(),
-            new redeemLauncher(),
-            new redeemGloves(),
-            new redeemM249()
-        };
-        kit[][] kits = new kit[][]
-{
-            //Level-1
-            new kit[]
-        {
-            new kit
-            (
-                new Item[] { ItemManager.CreateByName("", 1) },
-                new Item[] { ItemManager.CreateByName("bandage", 3) },
-                new Item[] { ItemManager.CreateByName("", 1) },
-                new Item[] { ItemManager.CreateByName("spear.stone", 1), ItemManager.CreateByName("spear.stone", 1), ItemManager.CreateByName("spear.stone", 1) },
-                "Soldier"
-            ),
-            new kit
-            (
-                new Item[] { ItemManager.CreateByName("", 1) },
-                new Item[] { ItemManager.CreateByName("bandage", 3) },
-                new Item[] { ItemManager.CreateByName("", 1) },
-                new Item[] { ItemManager.CreateByName("", 1)  },
-                "CQB",
-                4
-            ),
-            new kit
-            (
-                new Item[] { ItemManager.CreateByName("", 1) },
-                new Item[] { ItemManager.CreateByName("bandage", 3) },
-                new Item[] { ItemManager.CreateByName("pistol.nailgun", 1) },
-                new Item[] { ItemManager.CreateByName("", 1) },
-                "Rouge"
-            ),
-            new kit
-            (
-                new Item[] { ItemManager.CreateByName("", 1) },
-                new Item[] { ItemManager.CreateByName("bandage", 3) },
-                new Item[] { ItemManager.CreateByName("bow.hunting", 1) },
-                new Item[] { ItemManager.CreateByName("", 1) },
-                "Scout",
-                4
-            )
-        },
-            //Level-2
-            new kit[]
-        {
-            new kit
-            (
-                new Item[] { ItemManager.CreateByName("bone.armor.suit", 1) },
-                new Item[] { ItemManager.CreateByName("bandage", 3) },
-                new Item[] { ItemManager.CreateByName("bow.hunting", 1) },
-                new Item[] { ItemManager.CreateByName("", 1) },
-                "Soldier"
-            ),
-            new kit
-            (
-                new Item[] { ItemManager.CreateByName("bone.armor.suit", 1) },
-                new Item[] { ItemManager.CreateByName("bandage", 3) },
-                new Item[] { ItemManager.CreateByName("shotgun.waterpipe", 1) },
-                new Item[] { ItemManager.CreateByName("", 1) },
-                "CQB",
-                4
-            ),
-            new kit
-            (
-                new Item[] { ItemManager.CreateByName("", 1) },
-                new Item[] { ItemManager.CreateByName("bandage", 3) },
-                new Item[] { ItemManager.CreateByName("pistol.eoka", 1) },
-                new Item[] { ItemManager.CreateByName("knife.combat", 1) },
-                "Rouge",
-                4
-            ),
-            new kit
-            (
-                new Item[] { ItemManager.CreateByName("", 1) },
-                new Item[] { ItemManager.CreateByName("bandage", 3) },
-                new Item[] { ItemManager.CreateByName("crossbow", 1) },
-                new Item[] { ItemManager.CreateByName("", 1) },
-                "Scout",
-                4
-            )
-        },
-            //Level-3
-            new kit[]
-        {
-            new kit
-            (
-                new Item[] { ItemManager.CreateByName("roadsign.jacket", 1), ItemManager.CreateByName("coffeecan.helmet", 1), ItemManager.CreateByName("roadsign.kilt", 1), ItemManager.CreateByName("roadsign.gloves", 1), ItemManager.CreateByName("shoes.boots", 1), ItemManager.CreateByName("hoodie", 1), ItemManager.CreateByName("pants", 1) },
-                new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
-                new Item[] { ItemManager.CreateByName("smg.thompson", 1) },
-                new Item[] { ItemManager.CreateByName("", 1) },
-                "Soldier"
-            ),
-            new kit
-            (
-                new Item[] { ItemManager.CreateByName("roadsign.jacket", 1), ItemManager.CreateByName("coffeecan.helmet", 1), ItemManager.CreateByName("roadsign.kilt", 1), ItemManager.CreateByName("roadsign.gloves", 1), ItemManager.CreateByName("shoes.boots", 1), ItemManager.CreateByName("hoodie", 1), ItemManager.CreateByName("pants", 1) },
-                new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
-                new Item[] { ItemManager.CreateByName("smg.2", 1), ItemManager.CreateByName("shotgun.double", 1) },
-                new Item[] { ItemManager.CreateByName("", 1) },
-                "CQB",
-                2
-            ),
-            new kit
-            (
-                new Item[] { ItemManager.CreateByName("hazmatsuit", 1) },
-                new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
-                new Item[] { ItemManager.CreateByName("pistol.semiauto", 1) },
-                new Item[] { ItemManager.CreateByName("grenade.beancan", 5) },
-                "Rouge"
-            ),
-            new kit
-            (
-                new Item[] { ItemManager.CreateByName("hazmatsuit", 1) },
-                new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
-                new Item[] { ItemManager.CreateByName("rifle.semiauto", 1) },
-                new Item[] { ItemManager.CreateByName("", 1) },
-                "Scout"
-            )
-        },
-            //Level-4
-            new kit[]
-        {
-            new kit
-            (
-                new Item[] { ItemManager.CreateByName("metal.plate.torso", 1), ItemManager.CreateByName("metal.facemask", 1), ItemManager.CreateByName("roadsign.kilt", 1), ItemManager.CreateByName("roadsign.gloves", 1), ItemManager.CreateByName("shoes.boots", 1), ItemManager.CreateByName("hoodie", 1), ItemManager.CreateByName("pants", 1) },
-                new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
-                new Item[] { ItemManager.CreateByName("rifle.ak", 1) },
-                new Item[] { ItemManager.CreateByName("", 1) },
-                "Soldier"
-            ),
-            new kit
-            (
-                new Item[] { ItemManager.CreateByName("metal.plate.torso", 1), ItemManager.CreateByName("metal.facemask", 1), ItemManager.CreateByName("roadsign.kilt", 1), ItemManager.CreateByName("roadsign.gloves", 1), ItemManager.CreateByName("shoes.boots", 1), ItemManager.CreateByName("hoodie", 1), ItemManager.CreateByName("pants", 1) },
-                new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
-                new Item[] { ItemManager.CreateByName("shotgun.pump", 1), ItemManager.CreateByName("smg.2", 1) },
-                new Item[] { ItemManager.CreateByName("", 1) },
-                "CQB",
-                2
-            ),
-            new kit
-            (
-                new Item[] { ItemManager.CreateByName("roadsign.jacket", 1), ItemManager.CreateByName("metal.facemask", 1), ItemManager.CreateByName("roadsign.kilt", 1), ItemManager.CreateByName("roadsign.gloves", 1), ItemManager.CreateByName("shoes.boots", 1), ItemManager.CreateByName("hoodie", 1), ItemManager.CreateByName("pants", 1) },
-                new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
-                new Item[] { ItemManager.CreateByName("pistol.python", 1), ItemManager.CreateByName("crossbow", 1) },
-                new Item[] { ItemManager.CreateByName("grenade.f1", 5), ItemManager.CreateByName("arrow.fire", 5) },
-                "Rouge",
-                4
-            ),
-            new kit
-            (
-                new Item[] { ItemManager.CreateByName("roadsign.jacket", 1), ItemManager.CreateByName("metal.facemask", 1), ItemManager.CreateByName("roadsign.kilt", 1), ItemManager.CreateByName("tactical.gloves", 1), ItemManager.CreateByName("shoes.boots", 1), ItemManager.CreateByName("hoodie", 1), ItemManager.CreateByName("pants", 1) },
-                new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
-                new Item[] { ItemManager.CreateByName("rifle.bolt", 1), ItemManager.CreateByName("pistol.semiauto", 1) },
-                new Item[] { ItemManager.CreateByName("weapon.mod.small.scope", 1) },
-                "Scout",
-                4
-            )
-        },
-            //Level-5
-            new kit[]
-        {
-            new kit
-            (
-                new Item[] { ItemManager.CreateByName("metal.plate.torso", 1, 797410767), ItemManager.CreateByName("metal.facemask", 1, 784316334), ItemManager.CreateByName("roadsign.kilt", 1, 1442346890), ItemManager.CreateByName("roadsign.gloves", 1), ItemManager.CreateByName("shoes.boots", 1, 10023), ItemManager.CreateByName("hoodie", 1, 14179), ItemManager.CreateByName("pants", 1, 1406835139) },
-                new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
-                new Item[] { ItemManager.CreateByName("rifle.lr300", 1, 1741459108) },
-                new Item[] { ItemManager.CreateByName("", 1) },
-                "Soldier"
-            ),
-            new kit
-            (
-                new Item[] { ItemManager.CreateByName("metal.plate.torso", 1, 797410767), ItemManager.CreateByName("metal.facemask", 1, 784316334), ItemManager.CreateByName("roadsign.kilt", 1, 1442346890), ItemManager.CreateByName("roadsign.gloves", 1), ItemManager.CreateByName("shoes.boots", 1, 10023), ItemManager.CreateByName("hoodie", 1, 14179), ItemManager.CreateByName("pants", 1, 1406835139) },
-                new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
-                new Item[] { ItemManager.CreateByName("shotgun.spas12", 1), ItemManager.CreateByName("smg.mp5", 1) },
-                new Item[] { ItemManager.CreateByName("", 1) },
-                "CQB",
-                2
-            ),
-            new kit
-            (
-                new Item[] { ItemManager.CreateByName("metal.plate.torso", 1, 797410767), ItemManager.CreateByName("metal.facemask", 1, 784316334), ItemManager.CreateByName("roadsign.kilt", 1, 1442346890), ItemManager.CreateByName("roadsign.gloves", 1), ItemManager.CreateByName("shoes.boots", 1, 10023), ItemManager.CreateByName("hoodie", 1, 14179), ItemManager.CreateByName("pants", 1, 1406835139) },
-                new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
-                new Item[] { ItemManager.CreateByName("smg.mp5", 1), ItemManager.CreateByName("pistol.m92", 1) },
-                new Item[] { ItemManager.CreateByName("grenade.f1", 5)},
-                "Rouge",
-                2
-            ),
-            new kit
-            (
-                new Item[] { ItemManager.CreateByName("metal.plate.torso", 1, 797410767), ItemManager.CreateByName("metal.facemask", 1, 784316334), ItemManager.CreateByName("roadsign.kilt", 1, 1442346890), ItemManager.CreateByName("roadsign.gloves", 1), ItemManager.CreateByName("shoes.boots", 1, 10023), ItemManager.CreateByName("hoodie", 1, 14179), ItemManager.CreateByName("pants", 1, 1406835139) },
-                new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
-                new Item[] { ItemManager.CreateByName("rifle.m39", 1), ItemManager.CreateByName("pistol.m92", 1) },
-                new Item[] { ItemManager.CreateByName("weapon.mod.small.scope", 1) },
-                "Scout",
-                2
-            )
-        }
-};
-
         Vector3[][] maps = new Vector3[][] {
                 new Vector3[]
             {
@@ -658,14 +797,7 @@ namespace Oxide.Plugins
                 new Vector3(-54f, 21f, 269f)
             }
             };
-        public void Init()
-        {
-            redeems = redeems.OrderByDescending(m => m.requirement).ToArray();
-            redeems.Reverse();
-            UpdatePlayers();
-            PrintToChat("m");
-            PrintToChat(kits[Level].Length.ToString());
-        }
+
         /*object OnPlayerRespawn(BasePlayer player)
         {
             return new BasePlayer.SpawnPoint() { pos = getRandomSpawn(), rot = new Quaternion(0, 0, 0, 1) };
@@ -887,76 +1019,7 @@ namespace Oxide.Plugins
                 BullyPlayer(player, 0);
         }
 
-        [ChatCommand("Redeem")]
-        void ChatCommandRedeem(BasePlayer player, string command, string[] args)
-        {
-            if (args.Length > 1) BullyPlayer(player, 1);
-            else if (args.Length == 0)
-            {
-                string msg = "You have";
-                List<string> redeemstrings = new List<string>();
-                foreach (redeem Redeem in redeems)
-                {
-                    if (GetPlayerRedeem(player, Redeem.name) > 0)
-                    {
-                        msg += $", {GetPlayerRedeem(player, Redeem.name)} {Redeem.name}";
-                    }
-                }
-                player.ChatMessage(msg.Remove(msg.IndexOf(','), 1) + " redeems.");
-            }
-            else
-            {
-                int RedeemID;
-                var isInt = int.TryParse(args[0], out RedeemID);
-                if (isInt && RedeemID <= redeems.Length && RedeemID > 0)
-                {
-                    if (GetPlayerRedeem(player, redeems[RedeemID - 1].name) > 0)
-                    {
-                        Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + player.displayName + redeems[RedeemID - 1].name, GetPlayerRedeem(player, redeems[RedeemID - 1].name) - 1);
-                        redeems[RedeemID - 1].givePlayerRedeem(player);
-                        player.ChatMessage("You've redeemed " + redeems[RedeemID - 1].name + "!");
-                    }
-                    else player.ChatMessage("You do not have any of those redeems!");
-                }
-                else
-                {
-                    foreach (redeem Redeem in redeems)
-                    {
-                        if (Redeem.name == args[0])
-                        {
-                            if (GetPlayerRedeem(player, Redeem.name) > 0)
-                            {
-                                Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + player.displayName + Redeem.name, GetPlayerRedeem(player, Redeem.name) - 1);
-                                Redeem.givePlayerRedeem(player);
-                                player.ChatMessage("You've redeemed " + Redeem.name + "!");
-                                return;
-                            }
-                        }
-                    }
-                    BullyPlayer(player, 1);
-                }
-            }
-        }
 
-        [ChatCommand("Class")]
-        void ChatCommandClass(BasePlayer player, string command, string[] args)
-        {
-            if (args.Length == 0) player.ChatMessage("You're currently class " + kits[Level - 1][GetPlayerClass(player) - 1].kitName + "!");
-            else if (args.Length > 1) BullyPlayer(player, 1);
-            else
-            {
-                int Class;
-                var isInt = int.TryParse(args[0], out Class);
-                if (isInt && Class <= kits[Level - 1].Length && Class > 0)
-                {
-                    string ClassString = JsonConvert.SerializeObject(Class);
-                    Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + player.displayName, ClassString);
-                    player.ChatMessage("You've chosen class " + kits[Level - 1][Class - 1].kitName + "!");
-                }
-                else
-                    BullyPlayer(player, 1);
-            }
-        }
 
         [ChatCommand("GetXYZ")]
         void ChatCommandGetXYZ(BasePlayer player, string command, string[] args)
@@ -983,7 +1046,6 @@ namespace Oxide.Plugins
         {
             if (player.IsAdmin)
             {
-                Init();
                 UpdatePlayers();
             }
             else
@@ -1366,11 +1428,6 @@ namespace Oxide.Plugins
                 };
 
                 setupArena();
-            }
-
-            void Loaded()
-            {
-
             }
 
             void Unloaded()

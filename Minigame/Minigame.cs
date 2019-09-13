@@ -148,6 +148,14 @@ namespace Oxide.Plugins
                 players.Add(player);
                 broadcastToPlayers(string.Format(Lang["PlayerJoined"], player.displayName));
             }
+            virtual public void OnTriggerEnter(TriggerBase trigger, BasePlayer player)
+            {
+
+            }
+            virtual public void OnTriggerExit(TriggerBase trigger, BasePlayer player)
+            {
+
+            }
             public void broadcastToPlayers(string msg)
             {
                 foreach(var player in players)
@@ -159,9 +167,14 @@ namespace Oxide.Plugins
 
         public class HubGame : Game
         {
+            static Kit kit = kits[3][0];
             private Vector3 hubSpawn = new Vector3(42.6f, 45.0f, -232.7f);
-            public HubGame()
+            private TriggerTemperature trigger;
+            public HubGame(Vector3 hubSpawn)
             {
+                this.hubSpawn = hubSpawn;
+                trigger = new TriggerTemperature() {triggerSize = 10.0f, enabled = true};
+                trigger.transform.position = hubSpawn;
                 GameName = "Hub";
                 players = new List<BasePlayer>();
             }
@@ -200,22 +213,29 @@ namespace Oxide.Plugins
                 //Test();
                 return new BasePlayer.SpawnPoint() { pos = hubSpawn, rot = new Quaternion()};
             }
+            public override void OnTriggerEnter(TriggerBase trigger, BasePlayer player)
+            {
+                if (this.trigger = trigger as TriggerTemperature)
+                {
+                    kit.givePlayerKit(player);
+                }
+            }
+            public override void OnTriggerExit(TriggerBase trigger, BasePlayer player)
+            {
+                if (this.trigger = trigger as TriggerTemperature)
+                {
+                    player.inventory.Strip();
+                    player.Heal(100.0f);
+                }
+            }
         }
 
         public class PvPGame : Game
         {
-            Vector3[] Spawns = new Vector3[]
+            Vector3[] spawns;
+            public PvPGame(Vector3[] spawns)
             {
-                new Vector3(-196.5f, 40.0f, -57.0f),
-                new Vector3(-226.2f, 40.0f, -67.4f),
-                new Vector3(-191.6f, 40.1f, -123.1f),
-                new Vector3(-187.3f, 40.0f, -89.9f),
-                new Vector3(-219.3f, 40.0f, -122.4f),
-                new Vector3(-231.7f, 40.3f, -105.9f),
-                new Vector3(-186.6f, 40.3f, -74.3f),
-            };
-            public PvPGame()
-            {
+                this.spawns = spawns;
                 GameName = "PvP";
                 players = new List<BasePlayer>();
             }
@@ -228,12 +248,12 @@ namespace Oxide.Plugins
             public override BasePlayer.SpawnPoint getPlayerSpawn()
             {
                 Random rand = new Random();
-                return new BasePlayer.SpawnPoint() { pos = Spawns[rand.Next(Spawns.Length)], rot = new Quaternion() };
+                return new BasePlayer.SpawnPoint() { pos = spawns[rand.Next(spawns.Length)], rot = new Quaternion() };
             }
             private Vector3 GeneratePlayerSpawn()
             {
                 Random rand = new Random();
-                return Spawns[rand.Next(Spawns.Length)];
+                return spawns[rand.Next(spawns.Length)];
             }
             public override void playerJoinGame(BasePlayer player)
             {
@@ -340,10 +360,21 @@ namespace Oxide.Plugins
         private static List<Minigamer> Minigamers = new List<Minigamer>();
         List<Game> Games = new List<Game>
         {
-            new HubGame(),
-            new PvPGame(),
+            new HubGame(new Vector3(42.6f, 45.0f, -232.7f)),
+            new PvPGame(new Vector3[]
+            {
+                new Vector3(-196.5f, 40.0f, -57.0f),
+                new Vector3(-226.2f, 40.0f, -67.4f),
+                new Vector3(-191.6f, 40.1f, -123.1f),
+                new Vector3(-187.3f, 40.0f, -89.9f),
+                new Vector3(-219.3f, 40.0f, -122.4f),
+                new Vector3(-231.7f, 40.3f, -105.9f),
+                new Vector3(-186.6f, 40.3f, -74.3f),
+            }),
             new SurvivalGame()
         };
+
+        TriggerTemperature trigger;
 
         static bool isDebug = false;
 
@@ -741,6 +772,39 @@ namespace Oxide.Plugins
 
         #region Hooks
 
+        public void OnServerInitialized()
+        {
+
+            /*private Rigidbody rigidbody;
+
+            internal Collider collider;
+
+            internal Bounds bounds;
+            rigidbody = gameObject.AddComponent<Rigidbody>();
+            rigidbody.useGravity = false;
+            rigidbody.isKinematic = true;
+            rigidbody.detectCollisions = true;
+            rigidbody.collisionDetectionMode = CollisionDetectionMode.Discrete;
+
+            SphereCollider sphereCollider = gameObject.GetComponent<SphereCollider>();
+            BoxCollider boxCollider = gameObject.GetComponent<BoxCollider>();
+
+            if (definition.Size != Vector3.zero)
+            {
+                if (sphereCollider != null)
+                    Destroy(sphereCollider);
+
+                if (boxCollider == null)
+                {
+                    boxCollider = gameObject.AddComponent<BoxCollider>();
+                    boxCollider.isTrigger = true;
+                }
+                boxCollider.size = definition.Size;
+                bounds = boxCollider.bounds;
+                collider = boxCollider;
+            }*/
+        }
+
         public void Loaded()
         {
             redeems = redeems.OrderByDescending(m => m.requirement).ToArray();
@@ -759,11 +823,17 @@ namespace Oxide.Plugins
 
         private void OnEntityEnter(TriggerBase trigger, BaseEntity entity)
         {
-            /*if (!(trigger is TriggerSafeZone) && !(entity is BasePlayer)) return;
-            var safeZone = trigger as TriggerSafeZone;
-            if (safeZone == null) return;
-
-            safeZone.enabled = !disableCompoundTrigger;*/
+            if (entity is BasePlayer && entity as BasePlayer != null)
+            {
+                getMinigamer(entity as BasePlayer).game.OnTriggerEnter(trigger, entity as BasePlayer);
+            }
+        }
+        void OnEntityLeave(TriggerBase trigger, BaseEntity entity)
+        {
+            if (entity is BasePlayer && entity as BasePlayer != null)
+            {
+                getMinigamer(entity as BasePlayer).game.OnTriggerExit(trigger, entity as BasePlayer);
+            }
         }
 
         object OnPlayerRespawn(BasePlayer player)

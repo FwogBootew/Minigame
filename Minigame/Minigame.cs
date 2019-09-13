@@ -78,7 +78,7 @@ namespace Oxide.Plugins
         public class Minigamer
         {
             //General
-            public static List<BasePlayer> players;
+            public static List<BasePlayer> players = new List<BasePlayer>();
             public BasePlayer player;
             public Game game = null;
             //PvP
@@ -90,7 +90,7 @@ namespace Oxide.Plugins
                 Class = 0;
                 this.game = game;
                 this.player = player;
-                players.Add(this.player);
+                players.Add(player);
             }
             ~Minigamer()
             {
@@ -109,9 +109,11 @@ namespace Oxide.Plugins
             public void joinGame(Game game)
             {
                 this.game = game;
+                game.playerJoinGame(player);
             }
             public BasePlayer.SpawnPoint getSpawn()
             {
+                Test();
                 return game.getPlayerSpawn();
             }
         }
@@ -119,7 +121,7 @@ namespace Oxide.Plugins
         public class Game
         {
             public string GameName;
-            public List<BasePlayer> players;
+            public List<BasePlayer> players = new List<BasePlayer>();
             virtual public Vector3 getSpawn()
             {
                 return new Vector3();
@@ -157,6 +159,7 @@ namespace Oxide.Plugins
 
         public class HubGame : Game
         {
+            private Vector3 hubSpawn = new Vector3(42.6f, 45.0f, -232.7f);
             public HubGame()
             {
                 GameName = "Hub";
@@ -165,10 +168,27 @@ namespace Oxide.Plugins
             public override void playerLeaveGame(BasePlayer player)
             {
                 players.Remove(player);
+                if (isDebug)
+                {
+                    foreach (var person in BasePlayer.activePlayerList)
+                    {
+                        if (person.IsAdmin) person.ChatMessage("Player left hub");
+                    }
+                }
             }
             public override void playerJoinGame(BasePlayer player)
             {
                 players.Add(player);
+                player.inventory.Strip();
+                player.Heal(100.0f);
+                player.Teleport(hubSpawn);
+                if (isDebug)
+                {
+                    foreach (var person in BasePlayer.activePlayerList)
+                    {
+                        if (person.IsAdmin) person.ChatMessage("Player joined hub");
+                    }
+                }
             }
             public override void OnPlayerRespawn(BasePlayer player)
             {
@@ -177,7 +197,8 @@ namespace Oxide.Plugins
             }
             public override BasePlayer.SpawnPoint getPlayerSpawn()
             {
-                return new BasePlayer.SpawnPoint() { pos = new Vector3(/*put position here*/), rot = new Quaternion()};
+                //Test();
+                return new BasePlayer.SpawnPoint() { pos = hubSpawn, rot = new Quaternion()};
             }
         }
 
@@ -185,15 +206,13 @@ namespace Oxide.Plugins
         {
             Vector3[] Spawns = new Vector3[]
             {
-                new Vector3(-34, 21f, 35.2f),
-                new Vector3(-6.8f, 21f, 54.2f),
-                new Vector3(5.8f, 21f, 2f),
-                new Vector3(-7.7f, 21f, -10.6f),
-                new Vector3(-33f, 22f, -2.3f),
-                new Vector3(4.5f, 21f, 24.8f),
-                new Vector3(6f, 21f, 40.2f),
-                new Vector3(-38f, 20f, 5.2f),
-                new Vector3(5.7f, 21f, -9.8f)
+                new Vector3(-196.5f, 40.0f, -57.0f),
+                new Vector3(-226.2f, 40.0f, -67.4f),
+                new Vector3(-191.6f, 40.1f, -123.1f),
+                new Vector3(-187.3f, 40.0f, -89.9f),
+                new Vector3(-219.3f, 40.0f, -122.4f),
+                new Vector3(-231.7f, 40.3f, -105.9f),
+                new Vector3(-186.6f, 40.3f, -74.3f),
             };
             public PvPGame()
             {
@@ -208,11 +227,22 @@ namespace Oxide.Plugins
             }
             public override BasePlayer.SpawnPoint getPlayerSpawn()
             {
-                return new BasePlayer.SpawnPoint() { pos = GeneratePlayerSpawn(), rot = new Quaternion() };
+                Random rand = new Random();
+                return new BasePlayer.SpawnPoint() { pos = Spawns[rand.Next(Spawns.Length)], rot = new Quaternion() };
             }
             private Vector3 GeneratePlayerSpawn()
             {
-                return Spawns[new Random().Next(Spawns.Length)];
+                Random rand = new Random();
+                return Spawns[rand.Next(Spawns.Length)];
+            }
+            public override void playerJoinGame(BasePlayer player)
+            {
+                players.Add(player);
+                broadcastToPlayers(string.Format(Lang["PlayerJoined"], player.displayName));
+                player.Teleport(GeneratePlayerSpawn());
+                player.inventory.Strip();
+                player.Heal(100.0f - player.health);
+                kits[2][getMinigamer(player).Class].givePlayerKit(player);
             }
         }
         /**/
@@ -228,7 +258,7 @@ namespace Oxide.Plugins
 
         public class redeem
         {
-            public string name;
+            public string name = "";
             public int requirement;
             public redeem()
             {
@@ -267,7 +297,7 @@ namespace Oxide.Plugins
                 //weapon.mod.8x.scope
                 Item item = ItemManager.CreateByName("rifle.l96", 1);
                 (item.GetHeldEntity() as BaseProjectile).primaryMagazine.contents = (item.GetHeldEntity() as BaseProjectile).primaryMagazine.capacity;
-                item.GetHeldEntity().GiveItem(ItemManager.CreateByName("weapon.mod.8x.scope", 1));
+                //item.GetHeldEntity().GiveItem(ItemManager.CreateByName("weapon.mod.8x.scope", 1));
                 player.GiveItem(item);
                 player.GiveItem(ItemManager.CreateByName("weapon.mod.8x.scope", 1));
             }
@@ -315,7 +345,7 @@ namespace Oxide.Plugins
             new SurvivalGame()
         };
 
-        
+        static bool isDebug = false;
 
         public static Kit[][] kits = new Kit[][]
 {
@@ -324,35 +354,35 @@ namespace Oxide.Plugins
         {
             new Kit
             (
-                new Item[] { ItemManager.CreateByName("", 1) },
+                new Item[] { /*ItemManager.CreateByName("", 1)*/ },
                 new Item[] { ItemManager.CreateByName("bandage", 3) },
-                new Item[] { ItemManager.CreateByName("", 1) },
+                new Item[] { /*ItemManager.CreateByName("", 1)*/ },
                 new Item[] { ItemManager.CreateByName("spear.stone", 1), ItemManager.CreateByName("spear.stone", 1), ItemManager.CreateByName("spear.stone", 1) },
                 "Soldier"
             ),
             new Kit
             (
-                new Item[] { ItemManager.CreateByName("", 1) },
+                new Item[] { /*ItemManager.CreateByName("", 1)*/ },
                 new Item[] { ItemManager.CreateByName("bandage", 3) },
-                new Item[] { ItemManager.CreateByName("", 1) },
-                new Item[] { ItemManager.CreateByName("", 1)  },
+                new Item[] { /*ItemManager.CreateByName("", 1)*/ },
+                new Item[] { /*ItemManager.CreateByName("", 1)*/  },
                 "CQB",
                 4
             ),
             new Kit
             (
-                new Item[] { ItemManager.CreateByName("", 1) },
+                new Item[] { /*ItemManager.CreateByName("", 1)*/ },
                 new Item[] { ItemManager.CreateByName("bandage", 3) },
                 new Item[] { ItemManager.CreateByName("pistol.nailgun", 1) },
-                new Item[] { ItemManager.CreateByName("", 1) },
+                new Item[] { /*ItemManager.CreateByName("", 1)*/ },
                 "Rouge"
             ),
             new Kit
             (
-                new Item[] { ItemManager.CreateByName("", 1) },
+                new Item[] { /*ItemManager.CreateByName("", 1)*/ },
                 new Item[] { ItemManager.CreateByName("bandage", 3) },
                 new Item[] { ItemManager.CreateByName("bow.hunting", 1) },
-                new Item[] { ItemManager.CreateByName("", 1) },
+                new Item[] { /*ItemManager.CreateByName("", 1)*/ },
                 "Scout",
                 4
             )
@@ -365,7 +395,7 @@ namespace Oxide.Plugins
                 new Item[] { ItemManager.CreateByName("bone.armor.suit", 1) },
                 new Item[] { ItemManager.CreateByName("bandage", 3) },
                 new Item[] { ItemManager.CreateByName("bow.hunting", 1) },
-                new Item[] { ItemManager.CreateByName("", 1) },
+                new Item[] { /*ItemManager.CreateByName("", 1)*/ },
                 "Soldier"
             ),
             new Kit
@@ -373,13 +403,13 @@ namespace Oxide.Plugins
                 new Item[] { ItemManager.CreateByName("bone.armor.suit", 1) },
                 new Item[] { ItemManager.CreateByName("bandage", 3) },
                 new Item[] { ItemManager.CreateByName("shotgun.waterpipe", 1) },
-                new Item[] { ItemManager.CreateByName("", 1) },
+                new Item[] { /*ItemManager.CreateByName("", 1)*/ },
                 "CQB",
                 4
             ),
             new Kit
             (
-                new Item[] { ItemManager.CreateByName("", 1) },
+                new Item[] { /*ItemManager.CreateByName("", 1)*/ },
                 new Item[] { ItemManager.CreateByName("bandage", 3) },
                 new Item[] { ItemManager.CreateByName("pistol.eoka", 1) },
                 new Item[] { ItemManager.CreateByName("knife.combat", 1) },
@@ -388,10 +418,10 @@ namespace Oxide.Plugins
             ),
             new Kit
             (
-                new Item[] { ItemManager.CreateByName("", 1) },
+                new Item[] { /*ItemManager.CreateByName("", 1)*/ },
                 new Item[] { ItemManager.CreateByName("bandage", 3) },
                 new Item[] { ItemManager.CreateByName("crossbow", 1) },
-                new Item[] { ItemManager.CreateByName("", 1) },
+                new Item[] { /*ItemManager.CreateByName("", 1)*/ },
                 "Scout",
                 4
             )
@@ -404,7 +434,7 @@ namespace Oxide.Plugins
                 new Item[] { ItemManager.CreateByName("roadsign.jacket", 1), ItemManager.CreateByName("coffeecan.helmet", 1), ItemManager.CreateByName("roadsign.kilt", 1), ItemManager.CreateByName("roadsign.gloves", 1), ItemManager.CreateByName("shoes.boots", 1), ItemManager.CreateByName("hoodie", 1), ItemManager.CreateByName("pants", 1) },
                 new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
                 new Item[] { ItemManager.CreateByName("smg.thompson", 1) },
-                new Item[] { ItemManager.CreateByName("", 1) },
+                new Item[] { /*ItemManager.CreateByName("", 1)*/ },
                 "Soldier"
             ),
             new Kit
@@ -412,7 +442,7 @@ namespace Oxide.Plugins
                 new Item[] { ItemManager.CreateByName("roadsign.jacket", 1), ItemManager.CreateByName("coffeecan.helmet", 1), ItemManager.CreateByName("roadsign.kilt", 1), ItemManager.CreateByName("roadsign.gloves", 1), ItemManager.CreateByName("shoes.boots", 1), ItemManager.CreateByName("hoodie", 1), ItemManager.CreateByName("pants", 1) },
                 new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
                 new Item[] { ItemManager.CreateByName("smg.2", 1), ItemManager.CreateByName("shotgun.double", 1) },
-                new Item[] { ItemManager.CreateByName("", 1) },
+                new Item[] { /*ItemManager.CreateByName("", 1)*/ },
                 "CQB",
                 2
             ),
@@ -429,7 +459,7 @@ namespace Oxide.Plugins
                 new Item[] { ItemManager.CreateByName("hazmatsuit", 1) },
                 new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
                 new Item[] { ItemManager.CreateByName("rifle.semiauto", 1) },
-                new Item[] { ItemManager.CreateByName("", 1) },
+                new Item[] { /*ItemManager.CreateByName("", 1)*/ },
                 "Scout"
             )
         },
@@ -441,7 +471,7 @@ namespace Oxide.Plugins
                 new Item[] { ItemManager.CreateByName("metal.plate.torso", 1), ItemManager.CreateByName("metal.facemask", 1), ItemManager.CreateByName("roadsign.kilt", 1), ItemManager.CreateByName("roadsign.gloves", 1), ItemManager.CreateByName("shoes.boots", 1), ItemManager.CreateByName("hoodie", 1), ItemManager.CreateByName("pants", 1) },
                 new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
                 new Item[] { ItemManager.CreateByName("rifle.ak", 1) },
-                new Item[] { ItemManager.CreateByName("", 1) },
+                new Item[] { /*ItemManager.CreateByName("", 1)*/ },
                 "Soldier"
             ),
             new Kit
@@ -449,7 +479,7 @@ namespace Oxide.Plugins
                 new Item[] { ItemManager.CreateByName("metal.plate.torso", 1), ItemManager.CreateByName("metal.facemask", 1), ItemManager.CreateByName("roadsign.kilt", 1), ItemManager.CreateByName("roadsign.gloves", 1), ItemManager.CreateByName("shoes.boots", 1), ItemManager.CreateByName("hoodie", 1), ItemManager.CreateByName("pants", 1) },
                 new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
                 new Item[] { ItemManager.CreateByName("shotgun.pump", 1), ItemManager.CreateByName("smg.2", 1) },
-                new Item[] { ItemManager.CreateByName("", 1) },
+                new Item[] { /*ItemManager.CreateByName("", 1)*/ },
                 "CQB",
                 2
             ),
@@ -480,7 +510,7 @@ namespace Oxide.Plugins
                 new Item[] { ItemManager.CreateByName("metal.plate.torso", 1, 797410767), ItemManager.CreateByName("metal.facemask", 1, 784316334), ItemManager.CreateByName("roadsign.kilt", 1, 1442346890), ItemManager.CreateByName("roadsign.gloves", 1), ItemManager.CreateByName("shoes.boots", 1, 10023), ItemManager.CreateByName("hoodie", 1, 14179), ItemManager.CreateByName("pants", 1, 1406835139) },
                 new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
                 new Item[] { ItemManager.CreateByName("rifle.lr300", 1, 1741459108) },
-                new Item[] { ItemManager.CreateByName("", 1) },
+                new Item[] { /*ItemManager.CreateByName("", 1)*/ },
                 "Soldier"
             ),
             new Kit
@@ -488,7 +518,7 @@ namespace Oxide.Plugins
                 new Item[] { ItemManager.CreateByName("metal.plate.torso", 1, 797410767), ItemManager.CreateByName("metal.facemask", 1, 784316334), ItemManager.CreateByName("roadsign.kilt", 1, 1442346890), ItemManager.CreateByName("roadsign.gloves", 1), ItemManager.CreateByName("shoes.boots", 1, 10023), ItemManager.CreateByName("hoodie", 1, 14179), ItemManager.CreateByName("pants", 1, 1406835139) },
                 new Item[] { ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("syringe.medical", 2), ItemManager.CreateByName("bandage", 3) },
                 new Item[] { ItemManager.CreateByName("shotgun.spas12", 1), ItemManager.CreateByName("smg.mp5", 1) },
-                new Item[] { ItemManager.CreateByName("", 1) },
+                new Item[] { /*ItemManager.CreateByName("", 1)*/ },
                 "CQB",
                 2
             ),
@@ -517,17 +547,79 @@ namespace Oxide.Plugins
 
         #region Commands
 
+        [ChatCommand("Debug")]
+        void ccDebug(BasePlayer player)
+        {
+            if (player.IsAdmin)
+            {
+                if (isDebug) isDebug = false;
+                else isDebug = true;
+                return;
+            }
+            player.ChatMessage(Lang["NoUse"]);
+        }
+
+        [ChatCommand("Test")]
+        void ccTest(BasePlayer player)
+        {
+            if (player.IsAdmin)
+            {
+                try
+                {
+                    PrintToChat(getMinigamer(player).game.GameName);
+                }
+                catch
+                {
+                    PrintToChat("oof");
+                }
+                OnPlayerInit(player);
+                writeData<int>(0, "MinigameData/PvPData/" + player.displayName + "C");
+                writeData<int>(0, "MinigameData/PvPData/" + player.displayName + "K");
+                foreach (var redeem in redeems)
+                {
+                    writeData<int>(0, "MinigameData/PvPData/" + player.displayName + redeem.name);
+                }
+                PrintToChat("people 1");
+                foreach (var person in Games[0].players)
+                {
+                    PrintToChat(person.displayName);
+                }
+                PrintToChat("people 2");
+                foreach (var person in Games[1].players)
+                {
+                    PrintToChat(person.displayName);
+                }
+                return;
+            }
+            player.ChatMessage(Lang["NoUse"]);
+        }
+
+        [ChatCommand("Pos")]
+        void ccPos(BasePlayer player)
+        {
+            if (player.IsAdmin)
+            {
+                player.ChatMessage(player.ServerPosition.ToString());
+                return;
+            }
+            player.ChatMessage(Lang["NoUse"]);
+        }
+
         [ChatCommand("Join")]
         void ccJoin(BasePlayer player, string msg, string[] args)
         {
+            //add if in specified game already
             Minigamer minigamer = getMinigamer(player);
             if (args.Length == 1)
             {
                 foreach (var Game in Games)
                 {
-                    if (args[0].Contains(Game.GameName))
+                    if (args[0] == Game.GameName)
                     {
-                        if (minigamer.isInGame()) minigamer.leaveGame();
+                        if (minigamer.isInGame())
+                        {
+                            minigamer.leaveGame();
+                        }
                         minigamer.joinGame(Game);
                         return;
                     }
@@ -543,15 +635,31 @@ namespace Oxide.Plugins
         void ccLeave(BasePlayer player, string msg, string[] args)
         {
             Minigamer minigamer = getMinigamer(player);
-            if (!minigamer.isInGame())
+            if (minigamer.game == Games[0])
             {
                 player.ChatMessage(Lang["NotInGame"]);
+            }
+            else
+            {
+                minigamer.leaveGame();
+                minigamer.joinGame(Games[0]);
             }
         }
 
         #endregion
 
         #region Methods
+
+        static void Test()
+        {
+            if (isDebug)
+            {
+                foreach (var player in BasePlayer.activePlayerList)
+                {
+                    if (player.IsAdmin) player.ChatMessage("Test");
+                }
+            }
+        }
 
         T readData<T>(string path)
         {
@@ -568,7 +676,7 @@ namespace Oxide.Plugins
         {
             foreach (var Minigamer in Minigamers)
             {
-                if (Minigamer.player == player)
+                if (Minigamer.player.GetHashCode() == player.GetHashCode())
                 {
                     return Minigamer;
                 }
@@ -597,12 +705,15 @@ namespace Oxide.Plugins
             {
             //General
             {"BadArgs", "Invalid Arguements."},
+            {"NoUse", "You may not use this command."},
             {"PlayerJoined", "{0} has joined the game!"},
             {"PlayerLeft", "{0} has left the game."},
             {"DebugOn", "Debug mode enabled."},
             {"DebugOff", "Debug mode disabled."},
             {"BadGameName", "Could not find game {0}, please try a different name. Do /Games to get a list of games."},
             {"NotInGame", "You are not currently in a game."},
+            {"PlayerJoinedServer", "{0} has joined the server!"},
+            {"PlayerLeftServer", "{0} has left the server."},
             //Survival
             {"DebugEnemyList", "The following are the entites in the enemies list: {0}."},
             {"DebugWave", "Starting Wave {0} in {1} seconds."},
@@ -610,7 +721,6 @@ namespace Oxide.Plugins
             {"DidJoin", "You have joined the game, please wait for the next one to start."},
             {"DidLeave", "You have left the game."},
             {"HasLeft", "You have not joined a game."},
-            {"NoUse", "You may not use this command."},
             {"NewWave", "Beginning Wave {0}!"},
             {"AllDead", "Wave over, all enemies have died. 60 Seconds until next Wave."},
             {"GameOver", "All Players have died, game over."},
@@ -637,6 +747,16 @@ namespace Oxide.Plugins
             redeems.Reverse();
         }
 
+        void OnPlayerSpawn(BasePlayer player)
+        {
+            writeData<int>(0, "MinigameData/PvPData/" + player.displayName + "C");
+            writeData<int>(0, "MinigameData/PvPData/" + player.displayName + "K");
+            foreach (var redeem in redeems)
+            {
+                writeData<int>(0, "MinigameData/PvPData/" + player.displayName + redeem.name);
+            }
+        }
+
         private void OnEntityEnter(TriggerBase trigger, BaseEntity entity)
         {
             /*if (!(trigger is TriggerSafeZone) && !(entity is BasePlayer)) return;
@@ -648,53 +768,70 @@ namespace Oxide.Plugins
 
         object OnPlayerRespawn(BasePlayer player)
         {
-            return getMinigamer(player).getSpawn();
+            BasePlayer.SpawnPoint spawnPoint = getMinigamer(player).getSpawn();
+            return spawnPoint;
+        }
+
+        void OnPlayerRespawned(BasePlayer player)
+        {
+            getMinigamer(player).game.OnPlayerRespawn(player);
         }
 
         void OnPlayerInit(BasePlayer player)
         {
-            PrintToChat(player.displayName + " has joined!");
+            Minigamers.Add(new Minigamer(player, Games[0]));
+            //getMinigamer(player).game.playerJoinGame(player);
+            PrintToChat(string.Format(Lang["PlayerJoinedServer"], player.displayName));
         }
         void OnPlayerDisconnected(BasePlayer player)
         {
-            PrintToChat(player.displayName + " has left!");
+            getMinigamer(player).game.playerLeaveGame(player);
+            Minigamers.Remove(getMinigamer(player));
+            PrintToChat(string.Format(Lang["PlayerLeftServer"], player.displayName));
         }
 
         void OnPlayerDie(BasePlayer player, HitInfo info)
         {
-            BasePlayer attacker = info.InitiatorPlayer;
-            if (getMinigamer(attacker).game.GameName == "PvP" && getMinigamer(player).game.GameName == "PvP")
+            try
             {
-                int Kills;
-                if (attacker != player)
-                {
-                    Kills = readData<int>("MinigameData/ArenaData" + attacker.displayName + "K");
-                    Kills += 1;
-                    string color = "55ff00";
-                    if (Kills < 3) color = "55ff00";
-                    else if (Kills < 5) color = "95ff00";
-                    else if (Kills < 8) color = "d4ff00";
-                    else if (Kills < 10) color = "ffea00";
-                    else if (Kills < 15) color = "ffaa00";
-                    else if (Kills < 25) color = "ff6a00";
-                    else if (Kills < 35) color = "ff4000";
-                    else if (Kills < 50) color = "ff2b00";
-                    else if (Kills < 100) color = "ff0000";
-                    else color = "303030";
-                    attacker.ChatMessage($"<color=#{color}>{Kills.ToString()}</color> Kills Killstreak");
-                    writeData<int>(Kills, "MinigameData/ArenaData/" + attacker.displayName + "K");
-                    foreach (redeem Redeem in redeems)
+                BasePlayer attacker = info.InitiatorPlayer;
+                //if (getMinigamer(attacker).game.GameName == "PvP" && getMinigamer(player).game.GameName == "PvP")
+                //{
+                    int Kills;
+                    if (attacker != player)
                     {
-                        if (Kills == Redeem.requirement)
+                        Kills = readData<int>("MinigameData/PvPData/" + attacker.displayName + "K");
+                        Kills += 1;
+                        string color = "55ff00";
+                        if (Kills < 3) color = "55ff00";
+                        else if (Kills < 5) color = "95ff00";
+                        else if (Kills < 8) color = "d4ff00";
+                        else if (Kills < 10) color = "ffea00";
+                        else if (Kills < 15) color = "ffaa00";
+                        else if (Kills < 25) color = "ff6a00";
+                        else if (Kills < 35) color = "ff4000";
+                        else if (Kills < 50) color = "ff2b00";
+                        else if (Kills < 100) color = "ff0000";
+                        else color = "303030";
+                        attacker.ChatMessage($"<color=#{color}>{Kills.ToString()}</color> Kills Killstreak");
+                        writeData<int>(Kills, "MinigameData/PvPData/" + attacker.displayName + "K");
+                        foreach (redeem Redeem in redeems)
                         {
-                            //Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + attacker.displayName + Redeem.name, GetPlayerRedeem(attacker, Redeem.name) + 1);
-                            writeData<int>(readData<int>("MinigameData/ArenaData/" + attacker.displayName + Redeem.name) + 1, "MinigameData/ArenaData" + attacker.displayName + Redeem.name);
-                            attacker.ChatMessage($"You got a new <color=#3195ff>{Redeem.name}</color> redeem for " + Kills.ToString() + " kills! Use /Redeem to use it!");
+                            if (Kills == Redeem.requirement)
+                            {
+                                //Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + attacker.displayName + Redeem.name, GetPlayerRedeem(attacker, Redeem.name) + 1);
+                                writeData<int>(readData<int>("MinigameData/PvPData/" + attacker.displayName + Redeem.name) + 1, "MinigameData/PvPData/" + attacker.displayName + Redeem.name);
+                                attacker.ChatMessage($"You got a new <color=#3195ff>{Redeem.name}</color> redeem for " + Kills.ToString() + " kills! Use /Redeem to use it!");
+                            }
                         }
+                        writeData<int>(0, "MinigameData/PvPData/" + player.displayName + "K");
                     }
-                    writeData<int>(0, "MinigameData/ArenaData" + player.displayName + "K");
-                }
+                //}
             }
+            catch
+            {
+            }
+            
         }
 
         #endregion
@@ -716,7 +853,7 @@ namespace Oxide.Plugins
         #region Commands
 
         [ChatCommand("Redeem")]
-        void ChatCommandRedeem(BasePlayer player, string command, string[] args)
+        void ChatCommandRedeem(BasePlayer player, string cmd, string[] args)
         {
             if (getMinigamer(player).game.GameName == "PvP")
             {
@@ -727,67 +864,86 @@ namespace Oxide.Plugins
                     var isInt = int.TryParse(args[0], out RedeemID);
                     if (isInt && RedeemID <= redeems.Length && RedeemID > 0)
                     {
-                        if (readData<int>("MinigameData/ArenaData/" + player.displayName + redeems[RedeemID - 1].name) > 0)
+                        int i = readData<int>("MinigameData/PvPData/" + player.displayName + redeems[RedeemID - 1].name);
+                        if (i > 0)
                         {
-                            Interface.Oxide.DataFileSystem.WriteObject("MinigameData/PvPData/" + player.displayName + redeems[RedeemID - 1].name, readData<int>("MinigameData/ArenaData/" + player.displayName + redeems[RedeemID - 1].name) - 0);
+                            Interface.Oxide.DataFileSystem.WriteObject("MinigameData/PvPData/" + player.displayName + redeems[RedeemID - 1].name, readData<int>("MinigameData/PvPData/" + player.displayName + redeems[RedeemID - 1].name) - 0);
                             redeems[RedeemID - 1].givePlayerRedeem(player);
                             player.ChatMessage(string.Format(Lang["Redeemed"], redeems[RedeemID - 1].name));
                         }
                         else player.ChatMessage(Lang["NoRedeem"]);
                     }
-                }
-            }
-            /*else if (args.Length == 0)
-            {
-                string msg = "You have";
-                List<string> redeemstrings = new List<string>();
-                foreach (redeem Redeem in redeems)
-                {
-                    if (GetPlayerRedeem(player, Redeem.name) > 0)
+                    else
                     {
-                        msg += $", {GetPlayerRedeem(player, Redeem.name)} {Redeem.name}";
-                    }
-                }
-                player.ChatMessage(msg.Remove(msg.IndexOf(','), 1) + " redeems.");
-            }
-            else
-            {
-                int RedeemID;
-                var isInt = int.TryParse(args[0], out RedeemID);
-                if (isInt && RedeemID <= redeems.Length && RedeemID > 0)
-                {
-                    if (GetPlayerRedeem(player, redeems[RedeemID - 1].name) > 0)
-                    {
-                        Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + player.displayName + redeems[RedeemID - 1].name, GetPlayerRedeem(player, redeems[RedeemID - 1].name) - 1);
-                        redeems[RedeemID - 1].givePlayerRedeem(player);
-                        player.ChatMessage("You've redeemed " + redeems[RedeemID - 1].name + "!");
-                    }
-                    else player.ChatMessage("You do not have any of those redeems!");
-                }
-                else
-                {
-                    foreach (redeem Redeem in redeems)
-                    {
-                        if (Redeem.name == args[0])
+                        foreach (redeem Redeem in redeems)
                         {
-                            if (GetPlayerRedeem(player, Redeem.name) > 0)
+                            if (Redeem.name == args[0])
                             {
-                                Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + player.displayName + Redeem.name, GetPlayerRedeem(player, Redeem.name) - 1);
-                                Redeem.givePlayerRedeem(player);
-                                player.ChatMessage("You've redeemed " + Redeem.name + "!");
-                                return;
+                                if (readData<int>("MinigameData/PvPData/" + player.displayName + args[0]) > 0)
+                                {
+                                    Interface.Oxide.DataFileSystem.WriteObject("MinigameData/PvPData/" + player.displayName + Redeem.name, readData<int>("MinigameData/PvPData/" + player.displayName + args[0]) - 1);
+                                    Redeem.givePlayerRedeem(player);
+                                    player.ChatMessage(string.Format(Lang["Redeemed"], redeems[RedeemID - 1].name));
+                                    return;
+                                }
                             }
                         }
                     }
-                    BullyPlayer(player, 1);
+                    player.ChatMessage(Lang["BagArgs"]);
                 }
-            }*/
+            }
         }
+        /*else if (args.Length == 0)
+        {
+            string msg = "You have";
+            List<string> redeemstrings = new List<string>();
+            foreach (redeem Redeem in redeems)
+            {
+                if (GetPlayerRedeem(player, Redeem.name) > 0)
+                {
+                    msg += $", {GetPlayerRedeem(player, Redeem.name)} {Redeem.name}";
+                }
+            }
+            player.ChatMessage(msg.Remove(msg.IndexOf(','), 1) + " redeems.");
+        }
+        else
+        {
+            int RedeemID;
+            var isInt = int.TryParse(args[0], out RedeemID);
+            if (isInt && RedeemID <= redeems.Length && RedeemID > 0)
+            {
+                if (GetPlayerRedeem(player, redeems[RedeemID - 1].name) > 0)
+                {
+                    Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + player.displayName + redeems[RedeemID - 1].name, GetPlayerRedeem(player, redeems[RedeemID - 1].name) - 1);
+                    redeems[RedeemID - 1].givePlayerRedeem(player);
+                    player.ChatMessage("You've redeemed " + redeems[RedeemID - 1].name + "!");
+                }
+                else player.ChatMessage("You do not have any of those redeems!");
+            }
+            else
+            {
+                foreach (redeem Redeem in redeems)
+                {
+                    if (Redeem.name == args[0])
+                    {
+                        if (GetPlayerRedeem(player, Redeem.name) > 0)
+                        {
+                            Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + player.displayName + Redeem.name, GetPlayerRedeem(player, Redeem.name) - 1);
+                            Redeem.givePlayerRedeem(player);
+                            player.ChatMessage("You've redeemed " + Redeem.name + "!");
+                            return;
+                        }
+                    }
+                }
+                BullyPlayer(player, 1);
+            }
+        }*/
+
 
         [ChatCommand("Class")]
         void ChatCommandClass(BasePlayer player, string cmd, string[] args)
         {
-            if (args.Length == 0) player.ChatMessage(string.Format(Lang["CurrentClass"], kits[2][readData<int>("MinigameData/ArenaData/" + player.displayName + "C") - 1].kitName));
+            if (args.Length == 0) player.ChatMessage(string.Format(Lang["CurrentClass"], kits[2][readData<int>("MinigameData/PvPData/" + player.displayName + "C") - 1].kitName));
             else if (args.Length > 1) player.ChatMessage(Lang["BadArgs"]);
             else
             {
@@ -882,15 +1038,7 @@ namespace Oxide.Plugins
             }
             
         }*/
-        void OnPlayerSpawn(BasePlayer player)
-        {
-            writeData<int>(0, "MinigameData/ArenaData/" + player.displayName + "C");
-            writeData<int>(0, "MinigameData/ArenaData/" + player.displayName + "K");
-            foreach(var redeem in redeems)
-            {
-                writeData<int>(0, "MinigameData/ArenaData/" + player.displayName + redeem.name);
-            }
-        }
+
         
 
         /*void UpdatePlayers()
@@ -946,7 +1094,7 @@ namespace Oxide.Plugins
 
         //Classes
 
-        public class Order
+        /*public class Order
             {
                 public int sellID;
                 public int sellAmount;
@@ -1269,7 +1417,7 @@ namespace Oxide.Plugins
 
                 -484206264, 1, -932201673, 150 = blue card
                 */
-                };
+                /*};
 
                 setupArena();
             }
@@ -1303,7 +1451,7 @@ namespace Oxide.Plugins
                 return new BasePlayer.SpawnPoint() { pos = hubPos, rot = new Quaternion(0, 0, 0, 1) };
             }*/
 
-            void OnEntityKill(BaseNetworkable entity)
+            /*void OnEntityKill(BaseNetworkable entity)
             {
                 if (Enemies.Count != 0)
                 {
@@ -1465,7 +1613,7 @@ namespace Oxide.Plugins
 
 
 
-                for (int i = 0; i < foundationPos.Length; i++)
+                /*for (int i = 0; i < foundationPos.Length; i++)
                 {
                     temp = basecombat = null;
                     temp = GameManager.server.CreateEntity("assets/prefabs/building core/foundation/foundation.prefab", foundationPos[i], foundationRot[i], true);
@@ -1569,232 +1717,232 @@ namespace Oxide.Plugins
                 //GameManager.server.CreateEntity("assets/prefabs/deployable/tier 1 workbench/workbench1.deployed.prefab", workbenchPos, workbenchRot, true).Spawn();
             }
 
-            void setOrders(VendingMachine vendingMachine, int ordersID)
-            {
-                foreach (var thing in vendingMachineOrder[ordersID])
-                {
-                    ProtoBuf.VendingMachine.SellOrder order = new ProtoBuf.VendingMachine.SellOrder();
-                    order.itemToSellID = thing.sellID;
-                    order.itemToSellAmount = thing.sellAmount;
-                    order.currencyID = thing.currencyID;
-                    order.currencyAmountPerItem = thing.currencyAmount;
-                    vendingMachine.sellOrders.sellOrders.Add(order);
-                    ItemManager.CreateByItemID(thing.sellID, 999999/*, skin*/).MoveToContainer(vendingMachine.inventory);
-                    vendingMachine.RefreshSellOrderStockLevel();
-                }
+    /*void setOrders(VendingMachine vendingMachine, int ordersID)
+    {
+        foreach (var thing in vendingMachineOrder[ordersID])
+        {
+            ProtoBuf.VendingMachine.SellOrder order = new ProtoBuf.VendingMachine.SellOrder();
+            order.itemToSellID = thing.sellID;
+            order.itemToSellAmount = thing.sellAmount;
+            order.currencyID = thing.currencyID;
+            order.currencyAmountPerItem = thing.currencyAmount;
+            vendingMachine.sellOrders.sellOrders.Add(order);
+            ItemManager.CreateByItemID(thing.sellID, 999999/*, skin*//*).MoveToContainer(vendingMachine.inventory);
+            vendingMachine.RefreshSellOrderStockLevel();
+        }
 
-            }
+    }
 
-            void addOrder(NPCVendingMachine vendingMachine, int sellID, int sellAmount, int buyID, int buyAmount/*, ulong skin = 0*/)
-            {
-                ProtoBuf.VendingMachine.SellOrder order = new ProtoBuf.VendingMachine.SellOrder();
-                order.itemToSellID = sellID;
-                order.itemToSellAmount = sellAmount;
-                order.currencyID = buyID;
-                order.currencyAmountPerItem = buyAmount;
-                vendingMachine.sellOrders.sellOrders.Add(order);
-                ItemManager.CreateByItemID(sellID, 999999/*, skin*/).MoveToContainer(vendingMachine.inventory);
-                vendingMachine.RefreshSellOrderStockLevel();
-            }
+    void addOrder(NPCVendingMachine vendingMachine, int sellID, int sellAmount, int buyID, int buyAmount/*, ulong skin = 0*//*)
+    {
+        ProtoBuf.VendingMachine.SellOrder order = new ProtoBuf.VendingMachine.SellOrder();
+        order.itemToSellID = sellID;
+        order.itemToSellAmount = sellAmount;
+        order.currencyID = buyID;
+        order.currencyAmountPerItem = buyAmount;
+        vendingMachine.sellOrders.sellOrders.Add(order);
+        ItemManager.CreateByItemID(sellID, 999999/*, skin*//*).MoveToContainer(vendingMachine.inventory);
+        vendingMachine.RefreshSellOrderStockLevel();
+    }
 
-            void checkIsEnemiesDead()
-            {
-                if (Enemies.Count == 0)
-                {
-                    RunGame(waveTime);
-                }
-            }
-
-            void checkIsPlayersDead()
-            {
-                if (Players.Count == 0 && isGame)
-                {
-                    endGame();
-                }
-            }
-
-            void endGame()
-            {
-                isGame = false;
-                PrintToChat(Lang["GameOver"]);
-                waveCount = 0;
-                //grill.transform.position = grillPos;
-                //door1.transform.position = doorPos1;
-                //door2.transform.position = doorPos2;
-                //grill.transform.TransformVector(grillPos);
-                //grill.transform.TransformVector(doorPos1);
-                //grill.transform.TransformVector(doorPos2);
-                door1.transform.position = doorPos1;
-                door1.SendNetworkUpdate();
-                door2.transform.position = doorPos2;
-                door2.SendNetworkUpdate();
-                grill.transform.position = grillPos;
-                grill.SendNetworkUpdate();
-                if (Enemies.Count != 0)
-                {
-                    for (int i = 0; i <= Enemies.Count; i++)
-                    {
-                        Enemies.Remove(Enemies[i]);
-                    }
-                    Enemies.Clear();
-                }
-                foreach (var person in Players)
-                {
-                    person.inventory.Strip();
-                    person.Heal(100.0f - person.health);
-                    person.Teleport(hubPos);
-                }
-            }
-
-            void startGame()
-            {
-                isGame = true;
-                foreach (var person in Players)
-                {
-                    //person.Teleport(spawnPos);
-                    person.inventory.Strip();
-                    person.Heal(100.0f - person.health);
-                    person.inventory.GiveItem(ItemManager.CreateByName("spear.stone", 1));
-                    person.inventory.GiveItem(ItemManager.CreateByName("bandage", 1));
-                }
-                PrintToChat("Starting Game!");
-                grill.transform.position = grill.transform.position - new Vector3(0.0f, 40.0f, 0.0f);
-                grill.SendNetworkUpdate();
-                //grill.transform.TransformVector(0.0f, 0.0f, 0.0f);
-                //grill.transform.position = new Vector3(0.0f, 1.0f, 0.0f);
-                // grill.transform.SetPositionAndRotation(new Vector3(0.0f, 1.0f, 0.0f), new Quaternion());
-                RunGame(15.0f);
-            }
-
-            void RunGame(float time)
-            {
-                if (isDebug)
-                {
-                    foreach (var player in BasePlayer.activePlayerList)
-                    {
-                        if (player.IsAdmin)
-                        {
-                            player.ChatMessage(string.Format(Lang["DebugWave"], waveCount, time));
-                        }
-                    }
-                }
-                timer.Repeat(time, 1, () =>
-                {
-                    if (isGame)
-                    {
-                        Wave();
-                    }
-
-                }
-                );
-            }
-
-            void Wave()
-            {
-                waveCount += 1;
-                PrintToChat(string.Format(Lang["NewWave"], waveCount));
-                prepareEnemies();
-                spawnEnemies();
-                if (isDebug)
-                {
-                    foreach (var player in BasePlayer.activePlayerList)
-                    {
-                        if (player.IsAdmin)
-                        {
-                            player.ChatMessage(string.Format(Lang["DebugEnemyList"], Enemies.ToSentence()));
-                        }
-                    }
-                }
-            }
-
-            bool isPlayer(BasePlayer player)
-            {
-                bool isPlayer = false;
-                foreach (var person in Players)
-                {
-                    if (person == player) isPlayer = true;
-                }
-                return isPlayer;
-            }
-
-            void prepareEnemies()
-            {
-
-            }
-
-            void spawnEnemies()
-            {
-                for (int i = 0; i < waveCount; i++)
-                {
-                    /*if (i % 6 == 0)
-                    {
-                        Enemies.Add(new BaseEntity());
-                        Enemies[Enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true);
-                        Enemies[Enemies.Count - 1].Spawn();
-                    }
-                    if (i % 3 == 0)
-                    {
-                        Enemies.Add(new BaseEntity());
-                        Enemies[Enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true);
-                        Enemies[Enemies.Count - 1].Spawn();
-                    }
-                    else */
-                    if (i % 3 == 0)
-                    {
-                        /*BaseEntity enemy2 = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true);
-                        enemy2.Spawn();
-                        Enemies.Add(enemy2);*/
-                        //Enemies.Add(GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true));
-                        //Enemies[Enemies.Count - 1].Spawn();
-                        Enemies.Add(new BaseEntity());
-                        Enemies[Enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos3, new Quaternion(), true);
-                        Enemies[Enemies.Count - 1].Spawn();
-                    }
-                    else if (i % 2 == 0)
-                    {
-                        /*BaseEntity enemy2 = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true);
-                        enemy2.Spawn();
-                        Enemies.Add(enemy2);*/
-                        //Enemies.Add(GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true));
-                        //Enemies[Enemies.Count - 1].Spawn();
-                        Enemies.Add(new BaseEntity());
-                        Enemies[Enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos2, new Quaternion(), true);
-                        Enemies[Enemies.Count - 1].Spawn();
-                    }
-                    else//(i % 1 == 0) else
-                    {
-                        /*BaseEntity enemy = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos2, new Quaternion(), true);
-                        enemy.Spawn();
-                        Enemies.Add(enemy);*/
-                        //new BaseEntity();
-                        Enemies.Add(new BaseEntity());
-                        Enemies[Enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true);
-                        Enemies[Enemies.Count - 1].Spawn();
-                    }
-                }
-            }
-
-            Vector3 getRandomEnemyPos()
-            {
-                Vector3 pos = new Vector3();
-                Random rand = new Random();
-                switch (rand.Next(2))
-                {
-                    case 1:
-                        pos = EnemyPos1;
-                        break;
-                    case 2:
-                        pos = EnemyPos2;
-                        break;
-                    default:
-                        pos = EnemyPos1;
-                        break;
-                }
-                return pos;
-            }
-
-            //Data
-
-            
+    void checkIsEnemiesDead()
+    {
+        if (Enemies.Count == 0)
+        {
+            RunGame(waveTime);
         }
     }
+
+    void checkIsPlayersDead()
+    {
+        if (Players.Count == 0 && isGame)
+        {
+            endGame();
+        }
+    }
+
+    void endGame()
+    {
+        isGame = false;
+        PrintToChat(Lang["GameOver"]);
+        waveCount = 0;
+        //grill.transform.position = grillPos;
+        //door1.transform.position = doorPos1;
+        //door2.transform.position = doorPos2;
+        //grill.transform.TransformVector(grillPos);
+        //grill.transform.TransformVector(doorPos1);
+        //grill.transform.TransformVector(doorPos2);
+        door1.transform.position = doorPos1;
+        door1.SendNetworkUpdate();
+        door2.transform.position = doorPos2;
+        door2.SendNetworkUpdate();
+        grill.transform.position = grillPos;
+        grill.SendNetworkUpdate();
+        if (Enemies.Count != 0)
+        {
+            for (int i = 0; i <= Enemies.Count; i++)
+            {
+                Enemies.Remove(Enemies[i]);
+            }
+            Enemies.Clear();
+        }
+        foreach (var person in Players)
+        {
+            person.inventory.Strip();
+            person.Heal(100.0f - person.health);
+            person.Teleport(hubPos);
+        }
+    }
+
+    void startGame()
+    {
+        isGame = true;
+        foreach (var person in Players)
+        {
+            //person.Teleport(spawnPos);
+            person.inventory.Strip();
+            person.Heal(100.0f - person.health);
+            person.inventory.GiveItem(ItemManager.CreateByName("spear.stone", 1));
+            person.inventory.GiveItem(ItemManager.CreateByName("bandage", 1));
+        }
+        PrintToChat("Starting Game!");
+        grill.transform.position = grill.transform.position - new Vector3(0.0f, 40.0f, 0.0f);
+        grill.SendNetworkUpdate();
+        //grill.transform.TransformVector(0.0f, 0.0f, 0.0f);
+        //grill.transform.position = new Vector3(0.0f, 1.0f, 0.0f);
+        // grill.transform.SetPositionAndRotation(new Vector3(0.0f, 1.0f, 0.0f), new Quaternion());
+        RunGame(15.0f);
+    }
+
+    void RunGame(float time)
+    {
+        if (isDebug)
+        {
+            foreach (var player in BasePlayer.activePlayerList)
+            {
+                if (player.IsAdmin)
+                {
+                    player.ChatMessage(string.Format(Lang["DebugWave"], waveCount, time));
+                }
+            }
+        }
+        timer.Repeat(time, 1, () =>
+        {
+            if (isGame)
+            {
+                Wave();
+            }
+
+        }
+        );
+    }
+
+    void Wave()
+    {
+        waveCount += 1;
+        PrintToChat(string.Format(Lang["NewWave"], waveCount));
+        prepareEnemies();
+        spawnEnemies();
+        if (isDebug)
+        {
+            foreach (var player in BasePlayer.activePlayerList)
+            {
+                if (player.IsAdmin)
+                {
+                    player.ChatMessage(string.Format(Lang["DebugEnemyList"], Enemies.ToSentence()));
+                }
+            }
+        }
+    }
+
+    bool isPlayer(BasePlayer player)
+    {
+        bool isPlayer = false;
+        foreach (var person in Players)
+        {
+            if (person == player) isPlayer = true;
+        }
+        return isPlayer;
+    }
+
+    void prepareEnemies()
+    {
+
+    }
+
+    void spawnEnemies()
+    {
+        for (int i = 0; i < waveCount; i++)
+        {
+            /*if (i % 6 == 0)
+            {
+                Enemies.Add(new BaseEntity());
+                Enemies[Enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true);
+                Enemies[Enemies.Count - 1].Spawn();
+            }
+            if (i % 3 == 0)
+            {
+                Enemies.Add(new BaseEntity());
+                Enemies[Enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true);
+                Enemies[Enemies.Count - 1].Spawn();
+            }
+            else */
+                                                           /*if (i % 3 == 0)
+                                                           {
+                                                               /*BaseEntity enemy2 = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true);
+                                                               enemy2.Spawn();
+                                                               Enemies.Add(enemy2);*/
+                                                           //Enemies.Add(GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true));
+                                                           //Enemies[Enemies.Count - 1].Spawn();
+                                                           /*Enemies.Add(new BaseEntity());
+                                                           Enemies[Enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos3, new Quaternion(), true);
+                                                           Enemies[Enemies.Count - 1].Spawn();
+                                                       }
+                                                       else if (i % 2 == 0)
+                                                       {
+                                                           /*BaseEntity enemy2 = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true);
+                                                           enemy2.Spawn();
+                                                           Enemies.Add(enemy2);*/
+                                                           //Enemies.Add(GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true));
+                                                           //Enemies[Enemies.Count - 1].Spawn();
+                                                           /*Enemies.Add(new BaseEntity());
+                                                           Enemies[Enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos2, new Quaternion(), true);
+                                                           Enemies[Enemies.Count - 1].Spawn();
+                                                       }
+                                                       else//(i % 1 == 0) else
+                                                       {
+                                                           /*BaseEntity enemy = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos2, new Quaternion(), true);
+                                                           enemy.Spawn();
+                                                           Enemies.Add(enemy);*/
+                                                           //new BaseEntity();
+                                                           /*Enemies.Add(new BaseEntity());
+                                                           Enemies[Enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true);
+                                                           Enemies[Enemies.Count - 1].Spawn();
+                                                       }
+                                                   }
+                                               }
+
+                                               Vector3 getRandomEnemyPos()
+                                               {
+                                                   Vector3 pos = new Vector3();
+                                                   Random rand = new Random();
+                                                   switch (rand.Next(2))
+                                                   {
+                                                       case 1:
+                                                           pos = EnemyPos1;
+                                                           break;
+                                                       case 2:
+                                                           pos = EnemyPos2;
+                                                           break;
+                                                       default:
+                                                           pos = EnemyPos1;
+                                                           break;
+                                                   }
+                                                   return pos;
+                                               }
+
+                                               //Data
+
+
+                                           }*/
+}

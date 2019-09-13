@@ -123,6 +123,7 @@ namespace Oxide.Plugins
             public string GameName;
             public List<BasePlayer> players = new List<BasePlayer>();
             public int playerMax;
+            public bool isOpen = true;
             virtual public Vector3 getSpawn()
             {
                 return new Vector3();
@@ -143,12 +144,14 @@ namespace Oxide.Plugins
             {
                 players.Remove(player);
                 UpdatePlayers();
+                checkIsOpen();
                 broadcastToPlayers(string.Format(Lang["PlayerLeft"], player.displayName));
             }
             virtual public void playerJoinGame(BasePlayer player)
             {
                 players.Add(player);
                 UpdatePlayers();
+                checkIsOpen();
                 broadcastToPlayers(string.Format(Lang["PlayerJoined"], player.displayName));
             }
             virtual public void OnTriggerEnter(TriggerBase trigger, BasePlayer player)
@@ -159,20 +162,20 @@ namespace Oxide.Plugins
             {
 
             }
+            virtual public void startGame()
+            {
+
+            }
+            virtual public void endGame()
+            {
+
+            }
             public void broadcastToPlayers(string msg)
             {
                 foreach (var player in players)
                 {
                     player.ChatMessage(msg);
                 }
-            }
-            public bool isOpen()
-            {
-                if (players.Count == playerMax)
-                {
-                    return false;
-                }
-                return true;
             }
             virtual public void UpdatePlayerUI(BasePlayer player)
             {
@@ -196,6 +199,12 @@ namespace Oxide.Plugins
                     UpdatePlayerUI(player);
                 }
             }
+            virtual public void checkIsOpen()
+            {
+                if (players.Count == playerMax) isOpen = false;
+                else isOpen = true;
+
+            }
         }
 
         public class HubGame : Game
@@ -216,6 +225,7 @@ namespace Oxide.Plugins
             {
                 players.Remove(player);
                 UpdatePlayers();
+                checkIsOpen();
                 if (isDebug)
                 {
                     foreach (var person in BasePlayer.activePlayerList)
@@ -228,6 +238,7 @@ namespace Oxide.Plugins
             {
                 players.Add(player);
                 UpdatePlayers();
+                checkIsOpen();
                 player.inventory.Strip();
                 player.Heal(100.0f);
                 player.Teleport(hubSpawn);
@@ -296,6 +307,7 @@ namespace Oxide.Plugins
             {
                 players.Add(player);
                 UpdatePlayers();
+                checkIsOpen();
                 broadcastToPlayers(string.Format(Lang["PlayerJoined"], player.displayName));
                 player.Teleport(GeneratePlayerSpawn());
                 player.inventory.Strip();
@@ -307,10 +319,45 @@ namespace Oxide.Plugins
 
         public class SurvivalGame : Game
         {
+            private Vector3 hubPos;
+            private Vector3 startPos;
+            private Vector3 zombiePos1;
+            private Vector3 zombiePos2;
+            private Vector3 zombiePos3;
+
+            private BasePlayer[] alivePlayers;
             public SurvivalGame()
             {
                 GameName = "Survival";
                 players = new List<BasePlayer>();
+                playerMax = 8;
+                alivePlayers = new BasePlayer[] { };
+            }
+            public override void startGame()
+            {
+                foreach (var player in players)
+                {
+                    player.Heal(100.0f);
+                    player.Teleport(startPos);
+                    player.inventory.Strip();
+                }
+            }
+            public override void endGame()
+            {
+                foreach (var player in players)
+                {
+                    player.Heal(100.0f);
+                    player.Teleport(hubPos);
+                    player.inventory.Strip();
+                }
+            }
+            public override void playerJoinGame(BasePlayer player)
+            {
+                base.playerJoinGame(player);
+            }
+            public override void playerLeaveGame(BasePlayer player)
+            {
+                base.playerLeaveGame(player);
             }
         }
 
@@ -411,8 +458,6 @@ namespace Oxide.Plugins
             }),
             new SurvivalGame()
         };
-
-        TriggerTemperature trigger;
 
         static bool isDebug = false;
 
@@ -685,7 +730,7 @@ namespace Oxide.Plugins
                 {
                     if (args[0] == Game.GameName)
                     {
-                        if (Game.isOpen())
+                        if (Game.isOpen)
                         {
                             if (minigamer.isInGame()) minigamer.leaveGame();
                             minigamer.joinGame(Game);

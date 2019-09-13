@@ -122,6 +122,7 @@ namespace Oxide.Plugins
         {
             public string GameName;
             public List<BasePlayer> players = new List<BasePlayer>();
+            public int playerMax;
             virtual public Vector3 getSpawn()
             {
                 return new Vector3();
@@ -141,11 +142,13 @@ namespace Oxide.Plugins
             virtual public void playerLeaveGame(BasePlayer player)
             {
                 players.Remove(player);
+                UpdatePlayers();
                 broadcastToPlayers(string.Format(Lang["PlayerLeft"], player.displayName));
             }
             virtual public void playerJoinGame(BasePlayer player)
             {
                 players.Add(player);
+                UpdatePlayers();
                 broadcastToPlayers(string.Format(Lang["PlayerJoined"], player.displayName));
             }
             virtual public void OnTriggerEnter(TriggerBase trigger, BasePlayer player)
@@ -158,9 +161,39 @@ namespace Oxide.Plugins
             }
             public void broadcastToPlayers(string msg)
             {
-                foreach(var player in players)
+                foreach (var player in players)
                 {
                     player.ChatMessage(msg);
+                }
+            }
+            public bool isOpen()
+            {
+                if (players.Count == playerMax)
+                {
+                    return false;
+                }
+                return true;
+            }
+            virtual public void UpdatePlayerUI(BasePlayer player)
+            {
+                try
+                {
+                    CuiHelper.DestroyUi(player, "Position_panel");
+                }
+                catch { }
+                string playersString = players.Count.ToString() + "/" + playerMax.ToString();
+
+                var containerplayercount = new CuiElementContainer();
+
+                var panelplayercount = containerplayercount.Add(new CuiPanel { Image = { Color = "0.1 0.1 0.1 0" }, RectTransform = { AnchorMin = "0.96 0.95", AnchorMax = "1 1" }, CursorEnabled = false }, "Hud", "Position_panel");
+                containerplayercount.Add(new CuiLabel { Text = { Text = playersString, FontSize = 18 }, RectTransform = { AnchorMin = "0.4 0", AnchorMax = "1.5 0.6" } }, panelplayercount);
+                CuiHelper.AddUi(player, containerplayercount);
+            }
+            public void UpdatePlayers()
+            {
+                foreach (BasePlayer player in players)
+                {
+                    UpdatePlayerUI(player);
                 }
             }
         }
@@ -173,14 +206,16 @@ namespace Oxide.Plugins
             public HubGame(Vector3 hubSpawn)
             {
                 this.hubSpawn = hubSpawn;
-                trigger = new TriggerTemperature() {triggerSize = 10.0f, enabled = true};
+                trigger = new TriggerTemperature() { triggerSize = 10.0f, enabled = true };
                 trigger.transform.position = hubSpawn;
                 GameName = "Hub";
                 players = new List<BasePlayer>();
+                playerMax = 100;
             }
             public override void playerLeaveGame(BasePlayer player)
             {
                 players.Remove(player);
+                UpdatePlayers();
                 if (isDebug)
                 {
                     foreach (var person in BasePlayer.activePlayerList)
@@ -192,6 +227,7 @@ namespace Oxide.Plugins
             public override void playerJoinGame(BasePlayer player)
             {
                 players.Add(player);
+                UpdatePlayers();
                 player.inventory.Strip();
                 player.Heal(100.0f);
                 player.Teleport(hubSpawn);
@@ -211,7 +247,7 @@ namespace Oxide.Plugins
             public override BasePlayer.SpawnPoint getPlayerSpawn()
             {
                 //Test();
-                return new BasePlayer.SpawnPoint() { pos = hubSpawn, rot = new Quaternion()};
+                return new BasePlayer.SpawnPoint() { pos = hubSpawn, rot = new Quaternion() };
             }
             public override void OnTriggerEnter(TriggerBase trigger, BasePlayer player)
             {
@@ -238,6 +274,7 @@ namespace Oxide.Plugins
                 this.spawns = spawns;
                 GameName = "PvP";
                 players = new List<BasePlayer>();
+                playerMax = 8;
             }
             public override void OnPlayerRespawn(BasePlayer player)
             {
@@ -258,6 +295,7 @@ namespace Oxide.Plugins
             public override void playerJoinGame(BasePlayer player)
             {
                 players.Add(player);
+                UpdatePlayers();
                 broadcastToPlayers(string.Format(Lang["PlayerJoined"], player.displayName));
                 player.Teleport(GeneratePlayerSpawn());
                 player.inventory.Strip();
@@ -647,12 +685,13 @@ namespace Oxide.Plugins
                 {
                     if (args[0] == Game.GameName)
                     {
-                        if (minigamer.isInGame())
+                        if (Game.isOpen())
                         {
-                            minigamer.leaveGame();
+                            if (minigamer.isInGame()) minigamer.leaveGame();
+                            minigamer.joinGame(Game);
+                            return;
                         }
-                        minigamer.joinGame(Game);
-                        return;
+                        else player.ChatMessage(Lang["GameFull"]);
                     }
                 }
                 player.ChatMessage(string.Format(Lang["BadGameName"], args[0]));
@@ -745,6 +784,7 @@ namespace Oxide.Plugins
             {"NotInGame", "You are not currently in a game."},
             {"PlayerJoinedServer", "{0} has joined the server!"},
             {"PlayerLeftServer", "{0} has left the server."},
+            {"GameFull", "That game is currently full."},
             //Survival
             {"DebugEnemyList", "The following are the entites in the enemies list: {0}."},
             {"DebugWave", "Starting Wave {0} in {1} seconds."},
@@ -809,6 +849,10 @@ namespace Oxide.Plugins
         {
             redeems = redeems.OrderByDescending(m => m.requirement).ToArray();
             redeems.Reverse();
+            foreach(var Game in Games)
+            {
+                Game.UpdatePlayers();
+            }
         }
 
         void OnPlayerSpawn(BasePlayer player)
@@ -867,41 +911,41 @@ namespace Oxide.Plugins
                 BasePlayer attacker = info.InitiatorPlayer;
                 //if (getMinigamer(attacker).game.GameName == "PvP" && getMinigamer(player).game.GameName == "PvP")
                 //{
-                    int Kills;
-                    if (attacker != player)
+                int Kills;
+                if (attacker != player)
+                {
+                    Kills = readData<int>("MinigameData/PvPData/" + attacker.displayName + "K");
+                    Kills += 1;
+                    string color = "55ff00";
+                    if (Kills < 3) color = "55ff00";
+                    else if (Kills < 5) color = "95ff00";
+                    else if (Kills < 8) color = "d4ff00";
+                    else if (Kills < 10) color = "ffea00";
+                    else if (Kills < 15) color = "ffaa00";
+                    else if (Kills < 25) color = "ff6a00";
+                    else if (Kills < 35) color = "ff4000";
+                    else if (Kills < 50) color = "ff2b00";
+                    else if (Kills < 100) color = "ff0000";
+                    else color = "303030";
+                    attacker.ChatMessage($"<color=#{color}>{Kills.ToString()}</color> Kills Killstreak");
+                    writeData<int>(Kills, "MinigameData/PvPData/" + attacker.displayName + "K");
+                    foreach (redeem Redeem in redeems)
                     {
-                        Kills = readData<int>("MinigameData/PvPData/" + attacker.displayName + "K");
-                        Kills += 1;
-                        string color = "55ff00";
-                        if (Kills < 3) color = "55ff00";
-                        else if (Kills < 5) color = "95ff00";
-                        else if (Kills < 8) color = "d4ff00";
-                        else if (Kills < 10) color = "ffea00";
-                        else if (Kills < 15) color = "ffaa00";
-                        else if (Kills < 25) color = "ff6a00";
-                        else if (Kills < 35) color = "ff4000";
-                        else if (Kills < 50) color = "ff2b00";
-                        else if (Kills < 100) color = "ff0000";
-                        else color = "303030";
-                        attacker.ChatMessage($"<color=#{color}>{Kills.ToString()}</color> Kills Killstreak");
-                        writeData<int>(Kills, "MinigameData/PvPData/" + attacker.displayName + "K");
-                        foreach (redeem Redeem in redeems)
+                        if (Kills == Redeem.requirement)
                         {
-                            if (Kills == Redeem.requirement)
-                            {
-                                //Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + attacker.displayName + Redeem.name, GetPlayerRedeem(attacker, Redeem.name) + 1);
-                                writeData<int>(readData<int>("MinigameData/PvPData/" + attacker.displayName + Redeem.name) + 1, "MinigameData/PvPData/" + attacker.displayName + Redeem.name);
-                                attacker.ChatMessage($"You got a new <color=#3195ff>{Redeem.name}</color> redeem for " + Kills.ToString() + " kills! Use /Redeem to use it!");
-                            }
+                            //Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + attacker.displayName + Redeem.name, GetPlayerRedeem(attacker, Redeem.name) + 1);
+                            writeData<int>(readData<int>("MinigameData/PvPData/" + attacker.displayName + Redeem.name) + 1, "MinigameData/PvPData/" + attacker.displayName + Redeem.name);
+                            attacker.ChatMessage($"You got a new <color=#3195ff>{Redeem.name}</color> redeem for " + Kills.ToString() + " kills! Use /Redeem to use it!");
                         }
-                        writeData<int>(0, "MinigameData/PvPData/" + player.displayName + "K");
                     }
+                    writeData<int>(0, "MinigameData/PvPData/" + player.displayName + "K");
+                }
                 //}
             }
             catch
             {
             }
-            
+
         }
 
         #endregion
@@ -919,6 +963,8 @@ namespace Oxide.Plugins
             new redeemGloves(),
             new redeemM249()
         };
+
+        #endregion
 
         #region Commands
 
@@ -963,52 +1009,6 @@ namespace Oxide.Plugins
                 }
             }
         }
-        /*else if (args.Length == 0)
-        {
-            string msg = "You have";
-            List<string> redeemstrings = new List<string>();
-            foreach (redeem Redeem in redeems)
-            {
-                if (GetPlayerRedeem(player, Redeem.name) > 0)
-                {
-                    msg += $", {GetPlayerRedeem(player, Redeem.name)} {Redeem.name}";
-                }
-            }
-            player.ChatMessage(msg.Remove(msg.IndexOf(','), 1) + " redeems.");
-        }
-        else
-        {
-            int RedeemID;
-            var isInt = int.TryParse(args[0], out RedeemID);
-            if (isInt && RedeemID <= redeems.Length && RedeemID > 0)
-            {
-                if (GetPlayerRedeem(player, redeems[RedeemID - 1].name) > 0)
-                {
-                    Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + player.displayName + redeems[RedeemID - 1].name, GetPlayerRedeem(player, redeems[RedeemID - 1].name) - 1);
-                    redeems[RedeemID - 1].givePlayerRedeem(player);
-                    player.ChatMessage("You've redeemed " + redeems[RedeemID - 1].name + "!");
-                }
-                else player.ChatMessage("You do not have any of those redeems!");
-            }
-            else
-            {
-                foreach (redeem Redeem in redeems)
-                {
-                    if (Redeem.name == args[0])
-                    {
-                        if (GetPlayerRedeem(player, Redeem.name) > 0)
-                        {
-                            Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + player.displayName + Redeem.name, GetPlayerRedeem(player, Redeem.name) - 1);
-                            Redeem.givePlayerRedeem(player);
-                            player.ChatMessage("You've redeemed " + Redeem.name + "!");
-                            return;
-                        }
-                    }
-                }
-                BullyPlayer(player, 1);
-            }
-        }*/
-
 
         [ChatCommand("Class")]
         void ChatCommandClass(BasePlayer player, string cmd, string[] args)
@@ -1020,7 +1020,7 @@ namespace Oxide.Plugins
                 int Class;
                 var isInt = int.TryParse(args[0], out Class);
                 if (isInt && Class <= kits[2].Length && Class > 0)
-                { 
+                {
                     writeData<int>(Class, "MinigameData/PvPData/" + player.displayName);
                     getMinigamer(player).Class = Class;
                     player.ChatMessage(string.Format(Lang["ChoseClass"], kits[2][Class - 1].kitName));
@@ -1031,495 +1031,497 @@ namespace Oxide.Plugins
 
         #endregion
 
-        #endregion
-
-        #endregion
-
-        #region SurvivalArena
-
-
-
-        #endregion
-
-        /*static int Map = 1;
-        static int Level = 1;
-        //public kit[][] kits = new kit[][] { };
+        #region Methods
         
-        Vector3[][] maps = new Vector3[][] {
-                new Vector3[]
-            {
-                new Vector3(-34, 21f, 35.2f),
-                new Vector3(-6.8f, 21f, 54.2f),
-                new Vector3(5.8f, 21f, 2f),
-                new Vector3(-7.7f, 21f, -10.6f),
-                new Vector3(-33f, 22f, -2.3f),
-                new Vector3(4.5f, 21f, 24.8f),
-                new Vector3(6f, 21f, 40.2f),
-                new Vector3(-38f, 20f, 5.2f),
-                new Vector3(5.7f, 21f, -9.8f)
-            },
-                new Vector3[]
-            {
-                new Vector3(-74, 21f, -226.5f),
-                new Vector3(-226.5f, 21f, -131.5f),
-                new Vector3(-140f, 24f, -107f),
-                new Vector3(-137f, 31f, -238f),
-                new Vector3(-186f, 31f, -197f),
-                new Vector3(-150f, 31f, -161f),
-                new Vector3(-121f, 32f, -225f),
-                new Vector3(-232.5f, 21f, -170.5f)
-            },
-                new Vector3[]
-            {
-                new Vector3(-18.4f, 22f, 258.5f),
-                new Vector3(13.5f, 21.5f, 216f),
-                new Vector3(-26f, 21f, 190f),
-                new Vector3(-64f, 21f, 210.5f),
-                new Vector3(-62f, 21f, 227f),
-                new Vector3(-24f, 21f, 214f),
-                new Vector3(-37.5f, 21f, -233.5f),
-                new Vector3(-54f, 21f, 269f)
-            }
-            };
+            #endregion
 
-        /*object OnPlayerRespawn(BasePlayer player)
-        {
-            return new BasePlayer.SpawnPoint() { pos = getRandomSpawn(), rot = new Quaternion(0, 0, 0, 1) };
-        }*/
-        /*void OnPlayerRespawned(BasePlayer player)
-        {
-            if (getMinigamer(player).game.GameName == "PvP")
-            {
-                int Class;
-                try
+            #endregion
+
+            #region SurvivalArena
+
+
+
+            #endregion
+
+            /*static int Map = 1;
+            static int Level = 1;
+            //public kit[][] kits = new kit[][] { };
+
+            Vector3[][] maps = new Vector3[][] {
+                    new Vector3[]
                 {
-                    Class = readData<int>("MinigameData/ArenaData/" + player.displayName + "C");
+                    new Vector3(-34, 21f, 35.2f),
+                    new Vector3(-6.8f, 21f, 54.2f),
+                    new Vector3(5.8f, 21f, 2f),
+                    new Vector3(-7.7f, 21f, -10.6f),
+                    new Vector3(-33f, 22f, -2.3f),
+                    new Vector3(4.5f, 21f, 24.8f),
+                    new Vector3(6f, 21f, 40.2f),
+                    new Vector3(-38f, 20f, 5.2f),
+                    new Vector3(5.7f, 21f, -9.8f)
+                },
+                    new Vector3[]
+                {
+                    new Vector3(-74, 21f, -226.5f),
+                    new Vector3(-226.5f, 21f, -131.5f),
+                    new Vector3(-140f, 24f, -107f),
+                    new Vector3(-137f, 31f, -238f),
+                    new Vector3(-186f, 31f, -197f),
+                    new Vector3(-150f, 31f, -161f),
+                    new Vector3(-121f, 32f, -225f),
+                    new Vector3(-232.5f, 21f, -170.5f)
+                },
+                    new Vector3[]
+                {
+                    new Vector3(-18.4f, 22f, 258.5f),
+                    new Vector3(13.5f, 21.5f, 216f),
+                    new Vector3(-26f, 21f, 190f),
+                    new Vector3(-64f, 21f, 210.5f),
+                    new Vector3(-62f, 21f, 227f),
+                    new Vector3(-24f, 21f, 214f),
+                    new Vector3(-37.5f, 21f, -233.5f),
+                    new Vector3(-54f, 21f, 269f)
                 }
-                catch (Exception exception)
-                {
-                    PrintToConsole(exception.ToString());
-                    string ClassString = JsonConvert.SerializeObject("1");
-                    Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + player.displayName, ClassString);
-                    Class = readData<int>("MinigameData/ArenaData/" + player.displayName + "C");
-                }
-                player.inventory.Strip();
-                player.Heal(100f);
-                kits[2][Class - 1].givePlayerKit(player);
-            }
-            
-        }*/
-
-        
-
-        /*void UpdatePlayers()
-        {
-            foreach (BasePlayer player in BasePlayer.activePlayerList as List<BasePlayer>)
-            {
-                CuiHelper.DestroyUi(player, "Position_panel");
-                CuiHelper.DestroyUi(player, "Position_panel2");
-                UpdatePlayerUI(player);
-            }
-        }
-        [ChatCommand("Update")]
-        void cccuiUpdate(BasePlayer player)
-        {
-            if (player.IsAdmin)
-            {
-                UpdatePlayers();
-            }
-            else
-                BullyPlayer(player, 0);
-        }
-        void UpdatePlayerUI(BasePlayer player)
-        {
-            string playersString = BasePlayer.activePlayerList.Count.ToString();
-
-            var containerplayercount = new CuiElementContainer();
-
-            var panelplayercount = containerplayercount.Add(new CuiPanel { Image = { Color = "0.1 0.1 0.1 0" }, RectTransform = { AnchorMin = "0.96 0.95", AnchorMax = "1 1" }, CursorEnabled = false }, "Hud", "Position_panel");
-            containerplayercount.Add(new CuiLabel { Text = { Text = playersString, FontSize = 18 }, RectTransform = { AnchorMin = "0.4 0", AnchorMax = "1.5 0.6" } }, panelplayercount);
-            CuiHelper.AddUi(player, containerplayercount);
-
-            /*var containerleaderboard = new CuiElementContainer();
-
-            var panelleaderboard = containerleaderboard.Add(new CuiPanel { Image = { Color = "0.1 0.1 0.1 0" }, RectTransform = { AnchorMin = "-0.11 0", AnchorMax = "0.2 1" }, CursorEnabled = false }, "Hud", "Position_panel2");
-            //List<BasePlayer> topPlayers;
-            //SortedDictionary<int, BasePlayer> topPlayers = new SortedDictionary<int, BasePlayer>();
-            List<KeyValuePair<int, BasePlayer>> topPlayers = new List<KeyValuePair<int, BasePlayer>>();
-            //List<int> topPlayers = new List<int>();
-            foreach (BasePlayer person in BasePlayer.activePlayerList as List<BasePlayer>)
-            {
-                topPlayers.Add(new KeyValuePair<int, BasePlayer>(GetPlayerKills(person), person));
-                //topPlayers.Add
-            }
-            float y = 0.98f;
-            foreach (KeyValuePair<int, BasePlayer> pair in topPlayers.OrderBy(kvp => kvp.Key).Take(3))
-            {
-                containerleaderboard.Add(new CuiLabel { Text = { Text = pair.Value.displayName + " " + pair.Key.ToString() + " kills", FontSize = 18 }, RectTransform = { AnchorMin = "0.98 0", AnchorMax = "1.5 1" } }, panelleaderboard);
-                  y -= 0.05f;
-            }
-            
-            CuiHelper.AddUi(player, containerleaderboard);*/
-        //}
-
-        //Classes
-
-        /*public class Order
-            {
-                public int sellID;
-                public int sellAmount;
-                public int currencyID;
-                public int currencyAmount;
-                public Order(int sellID, int sellAmount, int currencyID, int currencyAmount)
-                {
-                    this.sellID = sellID;
-                    this.sellAmount = sellAmount;
-                    this.currencyID = currencyID;
-                    this.currencyAmount = currencyAmount;
-                }
-            }
-
-            //Chat Commands
-
-            [ChatCommand("Join")]
-            void ccJoin(BasePlayer player)
-            {
-                if (isPlayer(player))
-                {
-                    player.ChatMessage(Lang["HasJoined"]);
-                }
-                else if (!isGame)
-                {
-                    Players.Add(player);
-                    player.ChatMessage(Lang["DidJoin"]);
-                    PrintToChat(string.Format(Lang["PlayerJoined"], player.displayName));
-                    player.Teleport(spawnPos);
-                    player.Heal(100.0f - player.health);
-                }
-                else
-                {
-                    player.ChatMessage(Lang["InGame"]);
-                }
-            }
-
-            [ChatCommand("Leave")]
-            void ccLeave(BasePlayer player)
-            {
-                if (isPlayer(player))
-                {
-                    player.ChatMessage(Lang["HasLeft"]);
-                    PrintToChat(string.Format(Lang["PlayerLeft"], player.displayName));
-                    Players.Remove(player);
-                    if (isGame)
-                    {
-                        player.DieInstantly();
-                    }
-                }
-                else
-                {
-                    player.ChatMessage(Lang["DidLeave"]);
-                }
-            }
-
-            //Admin Commands
-
-            [ChatCommand("Start")]
-            void ccStart(BasePlayer player)
-            {
-                if (player.IsAdmin)
-                {
-                    startGame();
-                }
-                else
-                {
-                    player.ChatMessage(Lang["NoUse"]);
-                }
-            }
-
-            [ChatCommand("Debug")]
-            void ccDebug(BasePlayer player)
-            {
-                if (player.IsAdmin)
-                {
-                    if (isDebug)
-                    {
-                        player.ChatMessage(Lang["DebugOff"]);
-                        isDebug = false;
-                    }
-                    else
-                    {
-                        player.ChatMessage(Lang["DebugOn"]);
-                        isDebug = true;
-                    }
-                }
-                else
-                {
-                    player.ChatMessage(Lang["NoUse"]);
-                }
-            }
-
-            [ChatCommand("Time")]
-            void ccTime(BasePlayer player, string cmd, string args)
-            {
-                if (player.IsAdmin)
-                {
-                    if (args.Length != 1)
-                    {
-                        player.ChatMessage(Lang["BadArgs"]);
-                    }
-                    else
-                    {
-                        float i;
-                        if (float.TryParse(args[0].ToString(), out i))
-                        {
-                            waveTime = i;
-                            player.ChatMessage(string.Format(Lang["SetTime"], args[0]));
-                        }
-                        else
-                        {
-                            player.ChatMessage(Lang["BadArgs"]);
-                        }
-                    }
-                }
-                else
-                {
-                    player.ChatMessage(Lang["NoUse"]);
-                }
-            }
-
-            [ChatCommand("End")]
-            void ccEnd(BasePlayer player)
-            {
-                if (player.IsAdmin)
-                {
-                    endGame();
-                }
-                else
-                {
-                    player.ChatMessage(Lang["NoUse"]);
-                }
-            }
-
-            [ChatCommand("Pos")]
-            void ccPos(BasePlayer player)
-            {
-                if (player.IsAdmin)
-                {
-                    player.ChatMessage(player.transform.position.ToString());
-                }
-                else
-                {
-                    player.ChatMessage(Lang["NoUse"]);
-                }
-            }
-
-            [ChatCommand("Rot")]
-            void ccRot(BasePlayer player)
-            {
-                if (player.IsAdmin)
-                {
-                    player.ChatMessage(player.GetNetworkRotation().y.ToString());
-                }
-                else
-                {
-                    player.ChatMessage(Lang["NoUse"]);
-                }
-            }
-
-            //Hooks
-
-            void OnServerInitialized()
-            {
-                Players = new List<BasePlayer>();
-                Enemies = new List<BaseEntity>();
-                ArenaObjects = new List<BaseEntity>();
-                vendingMachines = new List<NPCVendingMachine>();
-
-                foundationPos = new Vector3[]
-                {
-                new Vector3(-37.4f, 39.9f, 29.6f),
-                new Vector3(-24.3f, 39.9f, 17.5f),
-                new Vector3(-35.3f, 39.9f, 13.4f),
-                new Vector3(-41.3f, 39.9f, 18.6f),
-                new Vector3(-17.6f, 39.9f, 23.5f)
                 };
-                foundationRot = new Quaternion[]
-                {
-                new Quaternion(0.0f, 0.5f, 0.0f, 1.0f),
-                new Quaternion(0.0f, 0.5f, 0.0f, 1.0f),
-                new Quaternion(0.0f, 0.0f, 0.0f, 1.0f),
-                new Quaternion(0.0f, 0.0f, 0.0f, 1.0f),
-                new Quaternion(0.0f, 0.0f, 0.0f, 1.0f)
-                };
-                vendingMachinePos = new Vector3[]
-                {
-                new Vector3(-34.0f, 40.1f, 14.4f),
-                new Vector3(-35.4f, 40.1f, 14.3f),
-                new Vector3(-25.6f, 40.1f, 17.7f),
-                new Vector3(-37.1f, 40.1f, 28.1f),
-                new Vector3(-36.2f, 40.1f, 29.0f),
-                new Vector3(-24.4f, 40.1f, 18.7f),
-                new Vector3(-18.6f, 40.1f, 23.5f),
-                new Vector3(-39.9f, 40.1f, 19.1f)
-                };
-                Puts(vendingMachinePos.Length.ToString());
-                vendingMachineRot = new Quaternion[]
-                {
-                new Quaternion(0.0f, 0.02310395f, 0.0f, 1.0f),
-                new Quaternion(0.0f, 0.02310395f, 0.0f, 1.0f),
-                new Quaternion(0.0f, -0.35653587f, 0.0f, 1.0f),
-                new Quaternion(0.0f, 2.55653587f, 0.0f, 1.0f),
-                new Quaternion(0.0f, 2.55653587f, 0.0f, 1.0f),
-                new Quaternion(0.0f, -0.35653587f, 0.0f, 1.0f),
-                new Quaternion(0.0f, -0.95653587f, 0.0f, 1.0f),
-                new Quaternion(0.0f, 0.95653587f, 0.0f, 1.0f)
-                };
-                vendingMachineOrder = new Order[][]
-                {
-                new Order[]
-                {
-                    new Order(1079279582, 1, -932201673, 10),
-                    new Order(-2072273936, 1, -932201673, 1),
-                    new Order(1367190888, 1, -932201673, 3),
-                    new Order(-586342290, 1, -932201673, 14)
-                },
-                new Order[]
-                {
-                    new Order(1751045826, 1, -932201673, 15),
-                    new Order(237239288, 1, -932201673, 15),
-                    new Order(-1549739227, 1, -932201673, 15),
-                    new Order(-1108136649, 1, -932201673, 50)
-                },
-                new Order[]
-                {
-                    new Order(-803263829, 1, -932201673, 20),
-                    new Order(-699558439, 1, -932201673, 15),
-                    new Order(-2002277461, 1, -932201673, 15),
-                    new Order(1850456855, 1, -932201673, 15),
-                    new Order(-194953424, 1, -932201673, 30),
-                    new Order(1110385766, 1, -932201673, 35)
-                },
-                new Order[]
-                {
-                    new Order(1965232394, 1, -932201673, 30),
-                    new Order(649912614, 1, -932201673, 40),
-                    new Order(-765183617, 1, -932201673, 50),
-                    new Order(818877484, 1, -932201673, 60),
-                    new Order(-904863145, 1, -932201673, 70),
-                    new Order(1796682209, 1, -932201673, 85)
-                },
-                new Order[]
-                {
-                    new Order(14241751, 1, -932201673, 5),
-                    new Order(-1234735557, 1, -932201673, 1),
-                    new Order(785728077, 3, -932201673, 1),
-                    new Order(-1211166256, 2, -932201673, 1),
-                    new Order(-1685290200, 1, -932201673, 4),
-                    new Order(-1036635990, 1, -932201673, 6)
-                },
-                new Order[]
-                {
-                    new Order(-932201673, 1, 69511070, 5),
-                    new Order(-932201673, 1, -151838493, 15),
-                    new Order(-932201673, 3, -858312878, 10),
-                    new Order(69511070, 2, -932201673, 1),
-                    new Order(-151838493, 3, -932201673, 1),
-                    new Order(-858312878, 2, -932201673, 1)
-                },
-                new Order[]
-                {
-                    new Order(1545779598, 1, -932201673, 200),
-                    new Order(1588298435, 1, -932201673, 70),
-                    new Order(-852563019, 1, -932201673, 130),
-                    new Order(-742865266, 1, -932201673, 85),
-                    new Order(143803535, 1, -932201673, 35),
-                    new Order(442886268, 1, -932201673, 400)
-                },
-                new Order[]
-                {
-                    new Order(-484206264, 1, -932201673, 150)
-                }
-                /*
-                1079279582, 1, -932201673, 10 = syringe
-                -2072273936, 1, -932201673, 1 = bandage
-                1367190888, 1, -932201673, 3 = corn
-                -586342290, 1, -932201673, 14 = blueberries
-
-                1751045826, 1, -932201673, 15 = hoodie
-                237239288, 1, -932201673, 15 = pants
-                -1549739227, 1, -932201673, 15 = boots
-                -1108136649, 1, -932201673, 50 = tac gloves
-
-                -803263829, 1, -932201673, 20 = coffecan
-                -699558439, 1, -932201673, 15 = road gloves
-                -2002277461, 1, -932201673, 15 =  road jacket
-                1850456855, 1, -932201673, 15 = road kilt
-                -194953424, 1, -932201673, 30 =  metal face
-                1110385766, 1, -932201673, 35 = metal chest
-
-                1965232394, 1, -932201673, 30 = crossy
-                649912614, 1, -932201673, 40 = revvy
-                -765183617, 1, -932201673, 50 = double barrel
-                818877484, 1, -932201673, 60 = p2
-                -904863145, 1, -932201673, 70 = semi rifle
-                1796682209, 1, -932201673, 85 = custom
-
-                14241751, 1, -932201673, 5 = fire arrow
-                -1234735557, 1, -932201673, 1 = arrow
-                785728077, 3, -932201673, 1 = pistol bullet
-                -1211166256, 2, -932201673, 1 = rifle bullet
-                -1685290200, 1, -932201673, 4 = 12 gauge
-                -1036635990, 1, -932201673, 6 = incen shell
-
-                -932201673, 1, 69511070, 5 = metal frags 4 scrap
-                -932201673, 1, -151838493, 15 = wood 4 scrap
-                -932201673, 3, -858312878, 10 = cloth 4 scrap
-                69511070, 2, -932201673, 1 = scrap 4 metal frags
-                -151838493, 3, -932201673, 1 = scrap 4 wood
-                -858312878, 2, -932201673, 1 = scrap 4 cloth
-
-                1545779598, 1, -932201673, 200/*, 1760078043* = /ak - no mercy
-                1588298435, 1, -932201673, 70 = bolt
-                -852563019, 1, -932201673, 130 = m92
-                -742865266, 1, -932201673, 85 = rocket
-                143803535, 1, -932201673, 35 = grenade
-                442886268, 1, -932201673, 400 = launcher
-
-                -484206264, 1, -932201673, 150 = blue card
-                */
-                /*};
-
-                setupArena();
-            }
-
-            void Unloaded()
-            {
-                endGame();
-                setupArena();
-            }
-
-            void OnPlayerSleepEnded(BasePlayer player)
-            {
-                player.inventory.Strip();
-            }
-
-            void OnPlayerDie(BasePlayer player)
-            {
-                if (isPlayer(player) && isGame)
-                {
-                    player.ChatMessage(Lang["Kicked"]);
-                    Players.Remove(player);
-                    checkIsPlayersDead();
-                }
-            }
 
             /*object OnPlayerRespawn(BasePlayer player)
             {
-                player.inventory.Strip();
-                player.Heal(100.0f - player.health);
-                Puts("OnPlayerRespawn works!");
-                return new BasePlayer.SpawnPoint() { pos = hubPos, rot = new Quaternion(0, 0, 0, 1) };
+                return new BasePlayer.SpawnPoint() { pos = getRandomSpawn(), rot = new Quaternion(0, 0, 0, 1) };
             }*/
+            /*void OnPlayerRespawned(BasePlayer player)
+            {
+                if (getMinigamer(player).game.GameName == "PvP")
+                {
+                    int Class;
+                    try
+                    {
+                        Class = readData<int>("MinigameData/ArenaData/" + player.displayName + "C");
+                    }
+                    catch (Exception exception)
+                    {
+                        PrintToConsole(exception.ToString());
+                        string ClassString = JsonConvert.SerializeObject("1");
+                        Interface.Oxide.DataFileSystem.WriteObject("ArenaData/" + player.displayName, ClassString);
+                        Class = readData<int>("MinigameData/ArenaData/" + player.displayName + "C");
+                    }
+                    player.inventory.Strip();
+                    player.Heal(100f);
+                    kits[2][Class - 1].givePlayerKit(player);
+                }
+
+            }*/
+
+
+
+            /*void UpdatePlayers()
+            {
+                foreach (BasePlayer player in BasePlayer.activePlayerList as List<BasePlayer>)
+                {
+                    CuiHelper.DestroyUi(player, "Position_panel");
+                    CuiHelper.DestroyUi(player, "Position_panel2");
+                    UpdatePlayerUI(player);
+                }
+            }
+            [ChatCommand("Update")]
+            void cccuiUpdate(BasePlayer player)
+            {
+                if (player.IsAdmin)
+                {
+                    UpdatePlayers();
+                }
+                else
+                    BullyPlayer(player, 0);
+            }
+            void UpdatePlayerUI(BasePlayer player)
+            {
+                string playersString = BasePlayer.activePlayerList.Count.ToString();
+
+                var containerplayercount = new CuiElementContainer();
+
+                var panelplayercount = containerplayercount.Add(new CuiPanel { Image = { Color = "0.1 0.1 0.1 0" }, RectTransform = { AnchorMin = "0.96 0.95", AnchorMax = "1 1" }, CursorEnabled = false }, "Hud", "Position_panel");
+                containerplayercount.Add(new CuiLabel { Text = { Text = playersString, FontSize = 18 }, RectTransform = { AnchorMin = "0.4 0", AnchorMax = "1.5 0.6" } }, panelplayercount);
+                CuiHelper.AddUi(player, containerplayercount);
+
+                /*var containerleaderboard = new CuiElementContainer();
+
+                var panelleaderboard = containerleaderboard.Add(new CuiPanel { Image = { Color = "0.1 0.1 0.1 0" }, RectTransform = { AnchorMin = "-0.11 0", AnchorMax = "0.2 1" }, CursorEnabled = false }, "Hud", "Position_panel2");
+                //List<BasePlayer> topPlayers;
+                //SortedDictionary<int, BasePlayer> topPlayers = new SortedDictionary<int, BasePlayer>();
+                List<KeyValuePair<int, BasePlayer>> topPlayers = new List<KeyValuePair<int, BasePlayer>>();
+                //List<int> topPlayers = new List<int>();
+                foreach (BasePlayer person in BasePlayer.activePlayerList as List<BasePlayer>)
+                {
+                    topPlayers.Add(new KeyValuePair<int, BasePlayer>(GetPlayerKills(person), person));
+                    //topPlayers.Add
+                }
+                float y = 0.98f;
+                foreach (KeyValuePair<int, BasePlayer> pair in topPlayers.OrderBy(kvp => kvp.Key).Take(3))
+                {
+                    containerleaderboard.Add(new CuiLabel { Text = { Text = pair.Value.displayName + " " + pair.Key.ToString() + " kills", FontSize = 18 }, RectTransform = { AnchorMin = "0.98 0", AnchorMax = "1.5 1" } }, panelleaderboard);
+                      y -= 0.05f;
+                }
+
+                CuiHelper.AddUi(player, containerleaderboard);*/
+            //}
+
+            //Classes
+
+            /*public class Order
+                {
+                    public int sellID;
+                    public int sellAmount;
+                    public int currencyID;
+                    public int currencyAmount;
+                    public Order(int sellID, int sellAmount, int currencyID, int currencyAmount)
+                    {
+                        this.sellID = sellID;
+                        this.sellAmount = sellAmount;
+                        this.currencyID = currencyID;
+                        this.currencyAmount = currencyAmount;
+                    }
+                }
+
+                //Chat Commands
+
+                [ChatCommand("Join")]
+                void ccJoin(BasePlayer player)
+                {
+                    if (isPlayer(player))
+                    {
+                        player.ChatMessage(Lang["HasJoined"]);
+                    }
+                    else if (!isGame)
+                    {
+                        Players.Add(player);
+                        player.ChatMessage(Lang["DidJoin"]);
+                        PrintToChat(string.Format(Lang["PlayerJoined"], player.displayName));
+                        player.Teleport(spawnPos);
+                        player.Heal(100.0f - player.health);
+                    }
+                    else
+                    {
+                        player.ChatMessage(Lang["InGame"]);
+                    }
+                }
+
+                [ChatCommand("Leave")]
+                void ccLeave(BasePlayer player)
+                {
+                    if (isPlayer(player))
+                    {
+                        player.ChatMessage(Lang["HasLeft"]);
+                        PrintToChat(string.Format(Lang["PlayerLeft"], player.displayName));
+                        Players.Remove(player);
+                        if (isGame)
+                        {
+                            player.DieInstantly();
+                        }
+                    }
+                    else
+                    {
+                        player.ChatMessage(Lang["DidLeave"]);
+                    }
+                }
+
+                //Admin Commands
+
+                [ChatCommand("Start")]
+                void ccStart(BasePlayer player)
+                {
+                    if (player.IsAdmin)
+                    {
+                        startGame();
+                    }
+                    else
+                    {
+                        player.ChatMessage(Lang["NoUse"]);
+                    }
+                }
+
+                [ChatCommand("Debug")]
+                void ccDebug(BasePlayer player)
+                {
+                    if (player.IsAdmin)
+                    {
+                        if (isDebug)
+                        {
+                            player.ChatMessage(Lang["DebugOff"]);
+                            isDebug = false;
+                        }
+                        else
+                        {
+                            player.ChatMessage(Lang["DebugOn"]);
+                            isDebug = true;
+                        }
+                    }
+                    else
+                    {
+                        player.ChatMessage(Lang["NoUse"]);
+                    }
+                }
+
+                [ChatCommand("Time")]
+                void ccTime(BasePlayer player, string cmd, string args)
+                {
+                    if (player.IsAdmin)
+                    {
+                        if (args.Length != 1)
+                        {
+                            player.ChatMessage(Lang["BadArgs"]);
+                        }
+                        else
+                        {
+                            float i;
+                            if (float.TryParse(args[0].ToString(), out i))
+                            {
+                                waveTime = i;
+                                player.ChatMessage(string.Format(Lang["SetTime"], args[0]));
+                            }
+                            else
+                            {
+                                player.ChatMessage(Lang["BadArgs"]);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        player.ChatMessage(Lang["NoUse"]);
+                    }
+                }
+
+                [ChatCommand("End")]
+                void ccEnd(BasePlayer player)
+                {
+                    if (player.IsAdmin)
+                    {
+                        endGame();
+                    }
+                    else
+                    {
+                        player.ChatMessage(Lang["NoUse"]);
+                    }
+                }
+
+                [ChatCommand("Pos")]
+                void ccPos(BasePlayer player)
+                {
+                    if (player.IsAdmin)
+                    {
+                        player.ChatMessage(player.transform.position.ToString());
+                    }
+                    else
+                    {
+                        player.ChatMessage(Lang["NoUse"]);
+                    }
+                }
+
+                [ChatCommand("Rot")]
+                void ccRot(BasePlayer player)
+                {
+                    if (player.IsAdmin)
+                    {
+                        player.ChatMessage(player.GetNetworkRotation().y.ToString());
+                    }
+                    else
+                    {
+                        player.ChatMessage(Lang["NoUse"]);
+                    }
+                }
+
+                //Hooks
+
+                void OnServerInitialized()
+                {
+                    Players = new List<BasePlayer>();
+                    Enemies = new List<BaseEntity>();
+                    ArenaObjects = new List<BaseEntity>();
+                    vendingMachines = new List<NPCVendingMachine>();
+
+                    foundationPos = new Vector3[]
+                    {
+                    new Vector3(-37.4f, 39.9f, 29.6f),
+                    new Vector3(-24.3f, 39.9f, 17.5f),
+                    new Vector3(-35.3f, 39.9f, 13.4f),
+                    new Vector3(-41.3f, 39.9f, 18.6f),
+                    new Vector3(-17.6f, 39.9f, 23.5f)
+                    };
+                    foundationRot = new Quaternion[]
+                    {
+                    new Quaternion(0.0f, 0.5f, 0.0f, 1.0f),
+                    new Quaternion(0.0f, 0.5f, 0.0f, 1.0f),
+                    new Quaternion(0.0f, 0.0f, 0.0f, 1.0f),
+                    new Quaternion(0.0f, 0.0f, 0.0f, 1.0f),
+                    new Quaternion(0.0f, 0.0f, 0.0f, 1.0f)
+                    };
+                    vendingMachinePos = new Vector3[]
+                    {
+                    new Vector3(-34.0f, 40.1f, 14.4f),
+                    new Vector3(-35.4f, 40.1f, 14.3f),
+                    new Vector3(-25.6f, 40.1f, 17.7f),
+                    new Vector3(-37.1f, 40.1f, 28.1f),
+                    new Vector3(-36.2f, 40.1f, 29.0f),
+                    new Vector3(-24.4f, 40.1f, 18.7f),
+                    new Vector3(-18.6f, 40.1f, 23.5f),
+                    new Vector3(-39.9f, 40.1f, 19.1f)
+                    };
+                    Puts(vendingMachinePos.Length.ToString());
+                    vendingMachineRot = new Quaternion[]
+                    {
+                    new Quaternion(0.0f, 0.02310395f, 0.0f, 1.0f),
+                    new Quaternion(0.0f, 0.02310395f, 0.0f, 1.0f),
+                    new Quaternion(0.0f, -0.35653587f, 0.0f, 1.0f),
+                    new Quaternion(0.0f, 2.55653587f, 0.0f, 1.0f),
+                    new Quaternion(0.0f, 2.55653587f, 0.0f, 1.0f),
+                    new Quaternion(0.0f, -0.35653587f, 0.0f, 1.0f),
+                    new Quaternion(0.0f, -0.95653587f, 0.0f, 1.0f),
+                    new Quaternion(0.0f, 0.95653587f, 0.0f, 1.0f)
+                    };
+                    vendingMachineOrder = new Order[][]
+                    {
+                    new Order[]
+                    {
+                        new Order(1079279582, 1, -932201673, 10),
+                        new Order(-2072273936, 1, -932201673, 1),
+                        new Order(1367190888, 1, -932201673, 3),
+                        new Order(-586342290, 1, -932201673, 14)
+                    },
+                    new Order[]
+                    {
+                        new Order(1751045826, 1, -932201673, 15),
+                        new Order(237239288, 1, -932201673, 15),
+                        new Order(-1549739227, 1, -932201673, 15),
+                        new Order(-1108136649, 1, -932201673, 50)
+                    },
+                    new Order[]
+                    {
+                        new Order(-803263829, 1, -932201673, 20),
+                        new Order(-699558439, 1, -932201673, 15),
+                        new Order(-2002277461, 1, -932201673, 15),
+                        new Order(1850456855, 1, -932201673, 15),
+                        new Order(-194953424, 1, -932201673, 30),
+                        new Order(1110385766, 1, -932201673, 35)
+                    },
+                    new Order[]
+                    {
+                        new Order(1965232394, 1, -932201673, 30),
+                        new Order(649912614, 1, -932201673, 40),
+                        new Order(-765183617, 1, -932201673, 50),
+                        new Order(818877484, 1, -932201673, 60),
+                        new Order(-904863145, 1, -932201673, 70),
+                        new Order(1796682209, 1, -932201673, 85)
+                    },
+                    new Order[]
+                    {
+                        new Order(14241751, 1, -932201673, 5),
+                        new Order(-1234735557, 1, -932201673, 1),
+                        new Order(785728077, 3, -932201673, 1),
+                        new Order(-1211166256, 2, -932201673, 1),
+                        new Order(-1685290200, 1, -932201673, 4),
+                        new Order(-1036635990, 1, -932201673, 6)
+                    },
+                    new Order[]
+                    {
+                        new Order(-932201673, 1, 69511070, 5),
+                        new Order(-932201673, 1, -151838493, 15),
+                        new Order(-932201673, 3, -858312878, 10),
+                        new Order(69511070, 2, -932201673, 1),
+                        new Order(-151838493, 3, -932201673, 1),
+                        new Order(-858312878, 2, -932201673, 1)
+                    },
+                    new Order[]
+                    {
+                        new Order(1545779598, 1, -932201673, 200),
+                        new Order(1588298435, 1, -932201673, 70),
+                        new Order(-852563019, 1, -932201673, 130),
+                        new Order(-742865266, 1, -932201673, 85),
+                        new Order(143803535, 1, -932201673, 35),
+                        new Order(442886268, 1, -932201673, 400)
+                    },
+                    new Order[]
+                    {
+                        new Order(-484206264, 1, -932201673, 150)
+                    }
+                    /*
+                    1079279582, 1, -932201673, 10 = syringe
+                    -2072273936, 1, -932201673, 1 = bandage
+                    1367190888, 1, -932201673, 3 = corn
+                    -586342290, 1, -932201673, 14 = blueberries
+
+                    1751045826, 1, -932201673, 15 = hoodie
+                    237239288, 1, -932201673, 15 = pants
+                    -1549739227, 1, -932201673, 15 = boots
+                    -1108136649, 1, -932201673, 50 = tac gloves
+
+                    -803263829, 1, -932201673, 20 = coffecan
+                    -699558439, 1, -932201673, 15 = road gloves
+                    -2002277461, 1, -932201673, 15 =  road jacket
+                    1850456855, 1, -932201673, 15 = road kilt
+                    -194953424, 1, -932201673, 30 =  metal face
+                    1110385766, 1, -932201673, 35 = metal chest
+
+                    1965232394, 1, -932201673, 30 = crossy
+                    649912614, 1, -932201673, 40 = revvy
+                    -765183617, 1, -932201673, 50 = double barrel
+                    818877484, 1, -932201673, 60 = p2
+                    -904863145, 1, -932201673, 70 = semi rifle
+                    1796682209, 1, -932201673, 85 = custom
+
+                    14241751, 1, -932201673, 5 = fire arrow
+                    -1234735557, 1, -932201673, 1 = arrow
+                    785728077, 3, -932201673, 1 = pistol bullet
+                    -1211166256, 2, -932201673, 1 = rifle bullet
+                    -1685290200, 1, -932201673, 4 = 12 gauge
+                    -1036635990, 1, -932201673, 6 = incen shell
+
+                    -932201673, 1, 69511070, 5 = metal frags 4 scrap
+                    -932201673, 1, -151838493, 15 = wood 4 scrap
+                    -932201673, 3, -858312878, 10 = cloth 4 scrap
+                    69511070, 2, -932201673, 1 = scrap 4 metal frags
+                    -151838493, 3, -932201673, 1 = scrap 4 wood
+                    -858312878, 2, -932201673, 1 = scrap 4 cloth
+
+                    1545779598, 1, -932201673, 200/*, 1760078043* = /ak - no mercy
+                    1588298435, 1, -932201673, 70 = bolt
+                    -852563019, 1, -932201673, 130 = m92
+                    -742865266, 1, -932201673, 85 = rocket
+                    143803535, 1, -932201673, 35 = grenade
+                    442886268, 1, -932201673, 400 = launcher
+
+                    -484206264, 1, -932201673, 150 = blue card
+                    */
+            /*};
+
+            setupArena();
+        }
+
+        void Unloaded()
+        {
+            endGame();
+            setupArena();
+        }
+
+        void OnPlayerSleepEnded(BasePlayer player)
+        {
+            player.inventory.Strip();
+        }
+
+        void OnPlayerDie(BasePlayer player)
+        {
+            if (isPlayer(player) && isGame)
+            {
+                player.ChatMessage(Lang["Kicked"]);
+                Players.Remove(player);
+                checkIsPlayersDead();
+            }
+        }
+
+        /*object OnPlayerRespawn(BasePlayer player)
+        {
+            player.inventory.Strip();
+            player.Heal(100.0f - player.health);
+            Puts("OnPlayerRespawn works!");
+            return new BasePlayer.SpawnPoint() { pos = hubPos, rot = new Quaternion(0, 0, 0, 1) };
+        }*/
 
             /*void OnEntityKill(BaseNetworkable entity)
             {
@@ -1671,348 +1673,348 @@ namespace Oxide.Plugins
                 setOrders(vendingMachine7.GetComponent<NPCVendingMachine>(), 6);
                 setOrders(vendingMachine8.GetComponent<NPCVendingMachine>(), 7);*/
 
-                /*for (int i = 0; i < vendingMachines.Count; i++)
-                {
-                    vendingMachines[i].Spawn();
-                    vendingMachines[i].ServerPosition = vendingMachinePos[i];
-                    vendingMachines[i].ServerRotation = vendingMachineRot[i];
-                    vendingMachines[i].GetComponent<NPCVendingMachine>().vendingOrders.orders = getOrders(i);
-                    ArenaObjects.Add(vendingMachines[i]);
-                }*/
+            /*for (int i = 0; i < vendingMachines.Count; i++)
+            {
+                vendingMachines[i].Spawn();
+                vendingMachines[i].ServerPosition = vendingMachinePos[i];
+                vendingMachines[i].ServerRotation = vendingMachineRot[i];
+                vendingMachines[i].GetComponent<NPCVendingMachine>().vendingOrders.orders = getOrders(i);
+                ArenaObjects.Add(vendingMachines[i]);
+            }*/
 
 
 
 
-                /*for (int i = 0; i < foundationPos.Length; i++)
-                {
-                    temp = basecombat = null;
-                    temp = GameManager.server.CreateEntity("assets/prefabs/building core/foundation/foundation.prefab", foundationPos[i], foundationRot[i], true);
-                    temp.Spawn();
-                    temp.GetComponent<BuildingBlock>().SetGrade((BuildingGrade.Enum)4);
-                    //temp.Spawn();
-                    basecombat = temp.GetComponentInParent<BaseCombatEntity>();
-                    basecombat.ChangeHealth(basecombat.MaxHealth());
-                    ArenaObjects.Add(temp);
-                }
-
-                /*BaseEntity vendingMachine1 = GameManager.server.CreateEntity("assets/prefabs/deployable/vendingmachine/vendingmachine.deployed.prefab", vendingMachinePos[0], vendingMachineRot[0], true);
-                BaseEntity vendingMachine2 = GameManager.server.CreateEntity("assets/prefabs/deployable/vendingmachine/vendingmachine.deployed.prefab", vendingMachinePos[1], vendingMachineRot[1], true);
-                BaseEntity vendingMachine3 = GameManager.server.CreateEntity("assets/prefabs/deployable/vendingmachine/vendingmachine.deployed.prefab", vendingMachinePos[2], vendingMachineRot[2], true);
-                BaseEntity vendingMachine4 = GameManager.server.CreateEntity("assets/prefabs/deployable/vendingmachine/vendingmachine.deployed.prefab", vendingMachinePos[3], vendingMachineRot[3], true);
-                BaseEntity vendingMachine5 = GameManager.server.CreateEntity("assets/prefabs/deployable/vendingmachine/vendingmachine.deployed.prefab", vendingMachinePos[4], vendingMachineRot[4], true);
-                BaseEntity vendingMachine6 = GameManager.server.CreateEntity("assets/prefabs/deployable/vendingmachine/vendingmachine.deployed.prefab", vendingMachinePos[5], vendingMachineRot[5], true);
-                BaseEntity vendingMachine7 = GameManager.server.CreateEntity("assets/prefabs/deployable/vendingmachine/vendingmachine.deployed.prefab", vendingMachinePos[6], vendingMachineRot[6], true);
-                BaseEntity vendingMachine8 = GameManager.server.CreateEntity("assets/prefabs/deployable/vendingmachine/vendingmachine.deployed.prefab", vendingMachinePos[7], vendingMachineRot[7], true);
-
-                vendingMachine1.Spawn();
-                vendingMachine2.Spawn();
-                vendingMachine3.Spawn();
-                vendingMachine4.Spawn();
-                vendingMachine5.Spawn();
-                vendingMachine6.Spawn();
-                vendingMachine7.Spawn();
-                vendingMachine8.Spawn();
-
-                ArenaObjects.Add(vendingMachine1);
-                ArenaObjects.Add(vendingMachine2);
-                ArenaObjects.Add(vendingMachine3);
-                ArenaObjects.Add(vendingMachine4);
-                ArenaObjects.Add(vendingMachine5);
-                ArenaObjects.Add(vendingMachine6);
-                ArenaObjects.Add(vendingMachine7);
-                ArenaObjects.Add(vendingMachine8);
-
-                //scrap = -932201673
-                //syringe = 1079279582
-                //bandage = -2072273936
-                //corn = 1367190888
-                //blueberries = -586342290
-
-                setOrders(vendingMachine1.GetComponent<VendingMachine>(), 0);
-                setOrders(vendingMachine2.GetComponent<VendingMachine>(), 1);
-                setOrders(vendingMachine3.GetComponent<VendingMachine>(), 2);
-                setOrders(vendingMachine4.GetComponent<VendingMachine>(), 3);
-                setOrders(vendingMachine5.GetComponent<VendingMachine>(), 4);
-                setOrders(vendingMachine6.GetComponent<VendingMachine>(), 5);
-                setOrders(vendingMachine7.GetComponent<VendingMachine>(), 6);
-                setOrders(vendingMachine8.GetComponent<VendingMachine>(), 7);*/
-
-                /*addOrder(vendingMachine1.GetComponent<VendingMachine>(), 1079279582, 1, -932201673, 10);//syringe
-                addOrder(vendingMachine1.GetComponent<VendingMachine>(), -2072273936, 1, -932201673, 1);//bandage
-                addOrder(vendingMachine1.GetComponent<VendingMachine>(), 1367190888, 1, -932201673, 3);//corn
-                addOrder(vendingMachine1.GetComponent<VendingMachine>(), -586342290, 1, -932201673, 14);//blueberries
-
-                addOrder(vendingMachine2.GetComponent<VendingMachine>(), 1751045826, 1, -932201673, 15);//hoodie
-                addOrder(vendingMachine2.GetComponent<VendingMachine>(), 237239288, 1, -932201673, 15);//pants
-                addOrder(vendingMachine2.GetComponent<VendingMachine>(), -1549739227, 1, -932201673, 15);//boots
-                addOrder(vendingMachine2.GetComponent<VendingMachine>(), -1108136649, 1, -932201673, 50);//tac gloves
-
-                addOrder(vendingMachine3.GetComponent<VendingMachine>(), -803263829, 1, -932201673, 20);//coffecan
-                addOrder(vendingMachine3.GetComponent<VendingMachine>(), -699558439, 1, -932201673, 15);//road gloves
-                addOrder(vendingMachine3.GetComponent<VendingMachine>(), -2002277461, 1, -932201673, 15);// road jacket
-                addOrder(vendingMachine3.GetComponent<VendingMachine>(), 1850456855, 1, -932201673, 15);//road kilt
-                addOrder(vendingMachine3.GetComponent<VendingMachine>(), -194953424, 1, -932201673, 30);// metal face
-                addOrder(vendingMachine3.GetComponent<VendingMachine>(), 1110385766, 1, -932201673, 35);//metal chest
-
-                addOrder(vendingMachine4.GetComponent<VendingMachine>(), 1965232394, 1, -932201673, 30);//crossy
-                addOrder(vendingMachine4.GetComponent<VendingMachine>(), 649912614, 1, -932201673, 40);//revvy
-                addOrder(vendingMachine4.GetComponent<VendingMachine>(), -765183617, 1, -932201673, 50);//double barrel
-                addOrder(vendingMachine4.GetComponent<VendingMachine>(), 818877484, 1, -932201673, 60);//p2
-                addOrder(vendingMachine4.GetComponent<VendingMachine>(), -904863145, 1, -932201673, 70);//semi rifle
-                addOrder(vendingMachine4.GetComponent<VendingMachine>(), 1796682209, 1, -932201673, 85);//custom
-
-                addOrder(vendingMachine5.GetComponent<VendingMachine>(), 14241751, 1, -932201673, 5);//fire arrow
-                addOrder(vendingMachine5.GetComponent<VendingMachine>(), -1234735557, 1, -932201673, 1);//arrow
-                addOrder(vendingMachine5.GetComponent<VendingMachine>(), 785728077, 3, -932201673, 1);//pistol bullet
-                addOrder(vendingMachine5.GetComponent<VendingMachine>(), -1211166256, 2, -932201673, 1);//rifle bullet
-                addOrder(vendingMachine5.GetComponent<VendingMachine>(), -1685290200, 1, -932201673, 4);//12 gauge
-                addOrder(vendingMachine5.GetComponent<VendingMachine>(), -1036635990, 1, -932201673, 6);//incen shell
-
-                addOrder(vendingMachine6.GetComponent<VendingMachine>(), -932201673, 1, 69511070, 5);//metal frags 4 scrap
-                addOrder(vendingMachine6.GetComponent<VendingMachine>(), -932201673, 1, -151838493, 15);//wood 4 scrap
-                addOrder(vendingMachine6.GetComponent<VendingMachine>(), -932201673, 3, -858312878, 10);//cloth 4 scrap
-                addOrder(vendingMachine6.GetComponent<VendingMachine>(), 69511070, 2, -932201673, 1);//scrap 4 metal frags
-                addOrder(vendingMachine6.GetComponent<VendingMachine>(), -151838493, 3, -932201673, 1);//scrap 4 wood
-                addOrder(vendingMachine6.GetComponent<VendingMachine>(), -858312878, 2, -932201673, 1);//scrap 4 cloth
-
-                addOrder(vendingMachine7.GetComponent<VendingMachine>(), 1545779598, 1, -932201673, 200);//ak
-                addOrder(vendingMachine7.GetComponent<VendingMachine>(), 1588298435, 1, -932201673, 70);//bolt
-                addOrder(vendingMachine7.GetComponent<VendingMachine>(), -852563019, 1, -932201673, 130);//m92
-                addOrder(vendingMachine7.GetComponent<VendingMachine>(), -742865266, 1, -932201673, 85);//rocket
-                addOrder(vendingMachine7.GetComponent<VendingMachine>(), 143803535, 1, -932201673, 35);//grenade
-                addOrder(vendingMachine7.GetComponent<VendingMachine>(), 442886268, 1, -932201673, 400);//launcher
-
-                addOrder(vendingMachine8.GetComponent<VendingMachine>(), -484206264, 1, -932201673, 150);//blue card*/
-
-                //GameManager.server.CreateEntity("assets/prefabs/deployable/tier 1 workbench/workbench1.deployed.prefab", workbenchPos, workbenchRot, true).Spawn();
+            /*for (int i = 0; i < foundationPos.Length; i++)
+            {
+                temp = basecombat = null;
+                temp = GameManager.server.CreateEntity("assets/prefabs/building core/foundation/foundation.prefab", foundationPos[i], foundationRot[i], true);
+                temp.Spawn();
+                temp.GetComponent<BuildingBlock>().SetGrade((BuildingGrade.Enum)4);
+                //temp.Spawn();
+                basecombat = temp.GetComponentInParent<BaseCombatEntity>();
+                basecombat.ChangeHealth(basecombat.MaxHealth());
+                ArenaObjects.Add(temp);
             }
 
-    /*void setOrders(VendingMachine vendingMachine, int ordersID)
-    {
-        foreach (var thing in vendingMachineOrder[ordersID])
+            /*BaseEntity vendingMachine1 = GameManager.server.CreateEntity("assets/prefabs/deployable/vendingmachine/vendingmachine.deployed.prefab", vendingMachinePos[0], vendingMachineRot[0], true);
+            BaseEntity vendingMachine2 = GameManager.server.CreateEntity("assets/prefabs/deployable/vendingmachine/vendingmachine.deployed.prefab", vendingMachinePos[1], vendingMachineRot[1], true);
+            BaseEntity vendingMachine3 = GameManager.server.CreateEntity("assets/prefabs/deployable/vendingmachine/vendingmachine.deployed.prefab", vendingMachinePos[2], vendingMachineRot[2], true);
+            BaseEntity vendingMachine4 = GameManager.server.CreateEntity("assets/prefabs/deployable/vendingmachine/vendingmachine.deployed.prefab", vendingMachinePos[3], vendingMachineRot[3], true);
+            BaseEntity vendingMachine5 = GameManager.server.CreateEntity("assets/prefabs/deployable/vendingmachine/vendingmachine.deployed.prefab", vendingMachinePos[4], vendingMachineRot[4], true);
+            BaseEntity vendingMachine6 = GameManager.server.CreateEntity("assets/prefabs/deployable/vendingmachine/vendingmachine.deployed.prefab", vendingMachinePos[5], vendingMachineRot[5], true);
+            BaseEntity vendingMachine7 = GameManager.server.CreateEntity("assets/prefabs/deployable/vendingmachine/vendingmachine.deployed.prefab", vendingMachinePos[6], vendingMachineRot[6], true);
+            BaseEntity vendingMachine8 = GameManager.server.CreateEntity("assets/prefabs/deployable/vendingmachine/vendingmachine.deployed.prefab", vendingMachinePos[7], vendingMachineRot[7], true);
+
+            vendingMachine1.Spawn();
+            vendingMachine2.Spawn();
+            vendingMachine3.Spawn();
+            vendingMachine4.Spawn();
+            vendingMachine5.Spawn();
+            vendingMachine6.Spawn();
+            vendingMachine7.Spawn();
+            vendingMachine8.Spawn();
+
+            ArenaObjects.Add(vendingMachine1);
+            ArenaObjects.Add(vendingMachine2);
+            ArenaObjects.Add(vendingMachine3);
+            ArenaObjects.Add(vendingMachine4);
+            ArenaObjects.Add(vendingMachine5);
+            ArenaObjects.Add(vendingMachine6);
+            ArenaObjects.Add(vendingMachine7);
+            ArenaObjects.Add(vendingMachine8);
+
+            //scrap = -932201673
+            //syringe = 1079279582
+            //bandage = -2072273936
+            //corn = 1367190888
+            //blueberries = -586342290
+
+            setOrders(vendingMachine1.GetComponent<VendingMachine>(), 0);
+            setOrders(vendingMachine2.GetComponent<VendingMachine>(), 1);
+            setOrders(vendingMachine3.GetComponent<VendingMachine>(), 2);
+            setOrders(vendingMachine4.GetComponent<VendingMachine>(), 3);
+            setOrders(vendingMachine5.GetComponent<VendingMachine>(), 4);
+            setOrders(vendingMachine6.GetComponent<VendingMachine>(), 5);
+            setOrders(vendingMachine7.GetComponent<VendingMachine>(), 6);
+            setOrders(vendingMachine8.GetComponent<VendingMachine>(), 7);*/
+
+            /*addOrder(vendingMachine1.GetComponent<VendingMachine>(), 1079279582, 1, -932201673, 10);//syringe
+            addOrder(vendingMachine1.GetComponent<VendingMachine>(), -2072273936, 1, -932201673, 1);//bandage
+            addOrder(vendingMachine1.GetComponent<VendingMachine>(), 1367190888, 1, -932201673, 3);//corn
+            addOrder(vendingMachine1.GetComponent<VendingMachine>(), -586342290, 1, -932201673, 14);//blueberries
+
+            addOrder(vendingMachine2.GetComponent<VendingMachine>(), 1751045826, 1, -932201673, 15);//hoodie
+            addOrder(vendingMachine2.GetComponent<VendingMachine>(), 237239288, 1, -932201673, 15);//pants
+            addOrder(vendingMachine2.GetComponent<VendingMachine>(), -1549739227, 1, -932201673, 15);//boots
+            addOrder(vendingMachine2.GetComponent<VendingMachine>(), -1108136649, 1, -932201673, 50);//tac gloves
+
+            addOrder(vendingMachine3.GetComponent<VendingMachine>(), -803263829, 1, -932201673, 20);//coffecan
+            addOrder(vendingMachine3.GetComponent<VendingMachine>(), -699558439, 1, -932201673, 15);//road gloves
+            addOrder(vendingMachine3.GetComponent<VendingMachine>(), -2002277461, 1, -932201673, 15);// road jacket
+            addOrder(vendingMachine3.GetComponent<VendingMachine>(), 1850456855, 1, -932201673, 15);//road kilt
+            addOrder(vendingMachine3.GetComponent<VendingMachine>(), -194953424, 1, -932201673, 30);// metal face
+            addOrder(vendingMachine3.GetComponent<VendingMachine>(), 1110385766, 1, -932201673, 35);//metal chest
+
+            addOrder(vendingMachine4.GetComponent<VendingMachine>(), 1965232394, 1, -932201673, 30);//crossy
+            addOrder(vendingMachine4.GetComponent<VendingMachine>(), 649912614, 1, -932201673, 40);//revvy
+            addOrder(vendingMachine4.GetComponent<VendingMachine>(), -765183617, 1, -932201673, 50);//double barrel
+            addOrder(vendingMachine4.GetComponent<VendingMachine>(), 818877484, 1, -932201673, 60);//p2
+            addOrder(vendingMachine4.GetComponent<VendingMachine>(), -904863145, 1, -932201673, 70);//semi rifle
+            addOrder(vendingMachine4.GetComponent<VendingMachine>(), 1796682209, 1, -932201673, 85);//custom
+
+            addOrder(vendingMachine5.GetComponent<VendingMachine>(), 14241751, 1, -932201673, 5);//fire arrow
+            addOrder(vendingMachine5.GetComponent<VendingMachine>(), -1234735557, 1, -932201673, 1);//arrow
+            addOrder(vendingMachine5.GetComponent<VendingMachine>(), 785728077, 3, -932201673, 1);//pistol bullet
+            addOrder(vendingMachine5.GetComponent<VendingMachine>(), -1211166256, 2, -932201673, 1);//rifle bullet
+            addOrder(vendingMachine5.GetComponent<VendingMachine>(), -1685290200, 1, -932201673, 4);//12 gauge
+            addOrder(vendingMachine5.GetComponent<VendingMachine>(), -1036635990, 1, -932201673, 6);//incen shell
+
+            addOrder(vendingMachine6.GetComponent<VendingMachine>(), -932201673, 1, 69511070, 5);//metal frags 4 scrap
+            addOrder(vendingMachine6.GetComponent<VendingMachine>(), -932201673, 1, -151838493, 15);//wood 4 scrap
+            addOrder(vendingMachine6.GetComponent<VendingMachine>(), -932201673, 3, -858312878, 10);//cloth 4 scrap
+            addOrder(vendingMachine6.GetComponent<VendingMachine>(), 69511070, 2, -932201673, 1);//scrap 4 metal frags
+            addOrder(vendingMachine6.GetComponent<VendingMachine>(), -151838493, 3, -932201673, 1);//scrap 4 wood
+            addOrder(vendingMachine6.GetComponent<VendingMachine>(), -858312878, 2, -932201673, 1);//scrap 4 cloth
+
+            addOrder(vendingMachine7.GetComponent<VendingMachine>(), 1545779598, 1, -932201673, 200);//ak
+            addOrder(vendingMachine7.GetComponent<VendingMachine>(), 1588298435, 1, -932201673, 70);//bolt
+            addOrder(vendingMachine7.GetComponent<VendingMachine>(), -852563019, 1, -932201673, 130);//m92
+            addOrder(vendingMachine7.GetComponent<VendingMachine>(), -742865266, 1, -932201673, 85);//rocket
+            addOrder(vendingMachine7.GetComponent<VendingMachine>(), 143803535, 1, -932201673, 35);//grenade
+            addOrder(vendingMachine7.GetComponent<VendingMachine>(), 442886268, 1, -932201673, 400);//launcher
+
+            addOrder(vendingMachine8.GetComponent<VendingMachine>(), -484206264, 1, -932201673, 150);//blue card*/
+
+            //GameManager.server.CreateEntity("assets/prefabs/deployable/tier 1 workbench/workbench1.deployed.prefab", workbenchPos, workbenchRot, true).Spawn();
+        }
+
+        /*void setOrders(VendingMachine vendingMachine, int ordersID)
+        {
+            foreach (var thing in vendingMachineOrder[ordersID])
+            {
+                ProtoBuf.VendingMachine.SellOrder order = new ProtoBuf.VendingMachine.SellOrder();
+                order.itemToSellID = thing.sellID;
+                order.itemToSellAmount = thing.sellAmount;
+                order.currencyID = thing.currencyID;
+                order.currencyAmountPerItem = thing.currencyAmount;
+                vendingMachine.sellOrders.sellOrders.Add(order);
+                ItemManager.CreateByItemID(thing.sellID, 999999/*, skin*//*).MoveToContainer(vendingMachine.inventory);
+                vendingMachine.RefreshSellOrderStockLevel();
+            }
+
+        }
+
+        void addOrder(NPCVendingMachine vendingMachine, int sellID, int sellAmount, int buyID, int buyAmount/*, ulong skin = 0*//*)
         {
             ProtoBuf.VendingMachine.SellOrder order = new ProtoBuf.VendingMachine.SellOrder();
-            order.itemToSellID = thing.sellID;
-            order.itemToSellAmount = thing.sellAmount;
-            order.currencyID = thing.currencyID;
-            order.currencyAmountPerItem = thing.currencyAmount;
+            order.itemToSellID = sellID;
+            order.itemToSellAmount = sellAmount;
+            order.currencyID = buyID;
+            order.currencyAmountPerItem = buyAmount;
             vendingMachine.sellOrders.sellOrders.Add(order);
-            ItemManager.CreateByItemID(thing.sellID, 999999/*, skin*//*).MoveToContainer(vendingMachine.inventory);
+            ItemManager.CreateByItemID(sellID, 999999/*, skin*//*).MoveToContainer(vendingMachine.inventory);
             vendingMachine.RefreshSellOrderStockLevel();
         }
 
-    }
-
-    void addOrder(NPCVendingMachine vendingMachine, int sellID, int sellAmount, int buyID, int buyAmount/*, ulong skin = 0*//*)
-    {
-        ProtoBuf.VendingMachine.SellOrder order = new ProtoBuf.VendingMachine.SellOrder();
-        order.itemToSellID = sellID;
-        order.itemToSellAmount = sellAmount;
-        order.currencyID = buyID;
-        order.currencyAmountPerItem = buyAmount;
-        vendingMachine.sellOrders.sellOrders.Add(order);
-        ItemManager.CreateByItemID(sellID, 999999/*, skin*//*).MoveToContainer(vendingMachine.inventory);
-        vendingMachine.RefreshSellOrderStockLevel();
-    }
-
-    void checkIsEnemiesDead()
-    {
-        if (Enemies.Count == 0)
+        void checkIsEnemiesDead()
         {
-            RunGame(waveTime);
-        }
-    }
-
-    void checkIsPlayersDead()
-    {
-        if (Players.Count == 0 && isGame)
-        {
-            endGame();
-        }
-    }
-
-    void endGame()
-    {
-        isGame = false;
-        PrintToChat(Lang["GameOver"]);
-        waveCount = 0;
-        //grill.transform.position = grillPos;
-        //door1.transform.position = doorPos1;
-        //door2.transform.position = doorPos2;
-        //grill.transform.TransformVector(grillPos);
-        //grill.transform.TransformVector(doorPos1);
-        //grill.transform.TransformVector(doorPos2);
-        door1.transform.position = doorPos1;
-        door1.SendNetworkUpdate();
-        door2.transform.position = doorPos2;
-        door2.SendNetworkUpdate();
-        grill.transform.position = grillPos;
-        grill.SendNetworkUpdate();
-        if (Enemies.Count != 0)
-        {
-            for (int i = 0; i <= Enemies.Count; i++)
+            if (Enemies.Count == 0)
             {
-                Enemies.Remove(Enemies[i]);
+                RunGame(waveTime);
             }
-            Enemies.Clear();
         }
-        foreach (var person in Players)
-        {
-            person.inventory.Strip();
-            person.Heal(100.0f - person.health);
-            person.Teleport(hubPos);
-        }
-    }
 
-    void startGame()
-    {
-        isGame = true;
-        foreach (var person in Players)
+        void checkIsPlayersDead()
         {
-            //person.Teleport(spawnPos);
-            person.inventory.Strip();
-            person.Heal(100.0f - person.health);
-            person.inventory.GiveItem(ItemManager.CreateByName("spear.stone", 1));
-            person.inventory.GiveItem(ItemManager.CreateByName("bandage", 1));
-        }
-        PrintToChat("Starting Game!");
-        grill.transform.position = grill.transform.position - new Vector3(0.0f, 40.0f, 0.0f);
-        grill.SendNetworkUpdate();
-        //grill.transform.TransformVector(0.0f, 0.0f, 0.0f);
-        //grill.transform.position = new Vector3(0.0f, 1.0f, 0.0f);
-        // grill.transform.SetPositionAndRotation(new Vector3(0.0f, 1.0f, 0.0f), new Quaternion());
-        RunGame(15.0f);
-    }
-
-    void RunGame(float time)
-    {
-        if (isDebug)
-        {
-            foreach (var player in BasePlayer.activePlayerList)
+            if (Players.Count == 0 && isGame)
             {
-                if (player.IsAdmin)
+                endGame();
+            }
+        }
+
+        void endGame()
+        {
+            isGame = false;
+            PrintToChat(Lang["GameOver"]);
+            waveCount = 0;
+            //grill.transform.position = grillPos;
+            //door1.transform.position = doorPos1;
+            //door2.transform.position = doorPos2;
+            //grill.transform.TransformVector(grillPos);
+            //grill.transform.TransformVector(doorPos1);
+            //grill.transform.TransformVector(doorPos2);
+            door1.transform.position = doorPos1;
+            door1.SendNetworkUpdate();
+            door2.transform.position = doorPos2;
+            door2.SendNetworkUpdate();
+            grill.transform.position = grillPos;
+            grill.SendNetworkUpdate();
+            if (Enemies.Count != 0)
+            {
+                for (int i = 0; i <= Enemies.Count; i++)
                 {
-                    player.ChatMessage(string.Format(Lang["DebugWave"], waveCount, time));
+                    Enemies.Remove(Enemies[i]);
+                }
+                Enemies.Clear();
+            }
+            foreach (var person in Players)
+            {
+                person.inventory.Strip();
+                person.Heal(100.0f - person.health);
+                person.Teleport(hubPos);
+            }
+        }
+
+        void startGame()
+        {
+            isGame = true;
+            foreach (var person in Players)
+            {
+                //person.Teleport(spawnPos);
+                person.inventory.Strip();
+                person.Heal(100.0f - person.health);
+                person.inventory.GiveItem(ItemManager.CreateByName("spear.stone", 1));
+                person.inventory.GiveItem(ItemManager.CreateByName("bandage", 1));
+            }
+            PrintToChat("Starting Game!");
+            grill.transform.position = grill.transform.position - new Vector3(0.0f, 40.0f, 0.0f);
+            grill.SendNetworkUpdate();
+            //grill.transform.TransformVector(0.0f, 0.0f, 0.0f);
+            //grill.transform.position = new Vector3(0.0f, 1.0f, 0.0f);
+            // grill.transform.SetPositionAndRotation(new Vector3(0.0f, 1.0f, 0.0f), new Quaternion());
+            RunGame(15.0f);
+        }
+
+        void RunGame(float time)
+        {
+            if (isDebug)
+            {
+                foreach (var player in BasePlayer.activePlayerList)
+                {
+                    if (player.IsAdmin)
+                    {
+                        player.ChatMessage(string.Format(Lang["DebugWave"], waveCount, time));
+                    }
+                }
+            }
+            timer.Repeat(time, 1, () =>
+            {
+                if (isGame)
+                {
+                    Wave();
+                }
+
+            }
+            );
+        }
+
+        void Wave()
+        {
+            waveCount += 1;
+            PrintToChat(string.Format(Lang["NewWave"], waveCount));
+            prepareEnemies();
+            spawnEnemies();
+            if (isDebug)
+            {
+                foreach (var player in BasePlayer.activePlayerList)
+                {
+                    if (player.IsAdmin)
+                    {
+                        player.ChatMessage(string.Format(Lang["DebugEnemyList"], Enemies.ToSentence()));
+                    }
                 }
             }
         }
-        timer.Repeat(time, 1, () =>
+
+        bool isPlayer(BasePlayer player)
         {
-            if (isGame)
+            bool isPlayer = false;
+            foreach (var person in Players)
             {
-                Wave();
+                if (person == player) isPlayer = true;
             }
+            return isPlayer;
+        }
+
+        void prepareEnemies()
+        {
 
         }
-        );
-    }
 
-    void Wave()
-    {
-        waveCount += 1;
-        PrintToChat(string.Format(Lang["NewWave"], waveCount));
-        prepareEnemies();
-        spawnEnemies();
-        if (isDebug)
+        void spawnEnemies()
         {
-            foreach (var player in BasePlayer.activePlayerList)
+            for (int i = 0; i < waveCount; i++)
             {
-                if (player.IsAdmin)
+                /*if (i % 6 == 0)
                 {
-                    player.ChatMessage(string.Format(Lang["DebugEnemyList"], Enemies.ToSentence()));
+                    Enemies.Add(new BaseEntity());
+                    Enemies[Enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true);
+                    Enemies[Enemies.Count - 1].Spawn();
                 }
-            }
-        }
-    }
-
-    bool isPlayer(BasePlayer player)
-    {
-        bool isPlayer = false;
-        foreach (var person in Players)
-        {
-            if (person == player) isPlayer = true;
-        }
-        return isPlayer;
-    }
-
-    void prepareEnemies()
-    {
-
-    }
-
-    void spawnEnemies()
-    {
-        for (int i = 0; i < waveCount; i++)
-        {
-            /*if (i % 6 == 0)
-            {
-                Enemies.Add(new BaseEntity());
-                Enemies[Enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true);
-                Enemies[Enemies.Count - 1].Spawn();
-            }
-            if (i % 3 == 0)
-            {
-                Enemies.Add(new BaseEntity());
-                Enemies[Enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true);
-                Enemies[Enemies.Count - 1].Spawn();
-            }
-            else */
-                                                           /*if (i % 3 == 0)
+                if (i % 3 == 0)
+                {
+                    Enemies.Add(new BaseEntity());
+                    Enemies[Enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true);
+                    Enemies[Enemies.Count - 1].Spawn();
+                }
+                else */
+                                                               /*if (i % 3 == 0)
+                                                               {
+                                                                   /*BaseEntity enemy2 = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true);
+                                                                   enemy2.Spawn();
+                                                                   Enemies.Add(enemy2);*/
+                                                               //Enemies.Add(GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true));
+                                                               //Enemies[Enemies.Count - 1].Spawn();
+                                                               /*Enemies.Add(new BaseEntity());
+                                                               Enemies[Enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos3, new Quaternion(), true);
+                                                               Enemies[Enemies.Count - 1].Spawn();
+                                                           }
+                                                           else if (i % 2 == 0)
                                                            {
                                                                /*BaseEntity enemy2 = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true);
                                                                enemy2.Spawn();
                                                                Enemies.Add(enemy2);*/
-                                                           //Enemies.Add(GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true));
-                                                           //Enemies[Enemies.Count - 1].Spawn();
-                                                           /*Enemies.Add(new BaseEntity());
-                                                           Enemies[Enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos3, new Quaternion(), true);
-                                                           Enemies[Enemies.Count - 1].Spawn();
-                                                       }
-                                                       else if (i % 2 == 0)
-                                                       {
-                                                           /*BaseEntity enemy2 = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true);
-                                                           enemy2.Spawn();
-                                                           Enemies.Add(enemy2);*/
-                                                           //Enemies.Add(GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true));
-                                                           //Enemies[Enemies.Count - 1].Spawn();
-                                                           /*Enemies.Add(new BaseEntity());
-                                                           Enemies[Enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos2, new Quaternion(), true);
-                                                           Enemies[Enemies.Count - 1].Spawn();
-                                                       }
-                                                       else//(i % 1 == 0) else
-                                                       {
-                                                           /*BaseEntity enemy = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos2, new Quaternion(), true);
-                                                           enemy.Spawn();
-                                                           Enemies.Add(enemy);*/
-                                                           //new BaseEntity();
-                                                           /*Enemies.Add(new BaseEntity());
-                                                           Enemies[Enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true);
-                                                           Enemies[Enemies.Count - 1].Spawn();
+                                                               //Enemies.Add(GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true));
+                                                               //Enemies[Enemies.Count - 1].Spawn();
+                                                               /*Enemies.Add(new BaseEntity());
+                                                               Enemies[Enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos2, new Quaternion(), true);
+                                                               Enemies[Enemies.Count - 1].Spawn();
+                                                           }
+                                                           else//(i % 1 == 0) else
+                                                           {
+                                                               /*BaseEntity enemy = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos2, new Quaternion(), true);
+                                                               enemy.Spawn();
+                                                               Enemies.Add(enemy);*/
+                                                               //new BaseEntity();
+                                                               /*Enemies.Add(new BaseEntity());
+                                                               Enemies[Enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true);
+                                                               Enemies[Enemies.Count - 1].Spawn();
+                                                           }
                                                        }
                                                    }
-                                               }
 
-                                               Vector3 getRandomEnemyPos()
-                                               {
-                                                   Vector3 pos = new Vector3();
-                                                   Random rand = new Random();
-                                                   switch (rand.Next(2))
+                                                   Vector3 getRandomEnemyPos()
                                                    {
-                                                       case 1:
-                                                           pos = EnemyPos1;
-                                                           break;
-                                                       case 2:
-                                                           pos = EnemyPos2;
-                                                           break;
-                                                       default:
-                                                           pos = EnemyPos1;
-                                                           break;
+                                                       Vector3 pos = new Vector3();
+                                                       Random rand = new Random();
+                                                       switch (rand.Next(2))
+                                                       {
+                                                           case 1:
+                                                               pos = EnemyPos1;
+                                                               break;
+                                                           case 2:
+                                                               pos = EnemyPos2;
+                                                               break;
+                                                           default:
+                                                               pos = EnemyPos1;
+                                                               break;
+                                                       }
+                                                       return pos;
                                                    }
-                                                   return pos;
-                                               }
 
-                                               //Data
+                                                   //Data
 
 
-                                           }*/
-}
+                                               }*/
+    }

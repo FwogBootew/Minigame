@@ -13,6 +13,19 @@ namespace Oxide.Plugins
     [Description("A Minigame plugin for Rust.")]
     public class Minigame : RustPlugin
     {
+        /*
+         * BaseEntity baseEntity = col?.ToBaseEntity();
+                if (!baseEntity.IsValid())
+                    return;
+
+                if (baseEntity is BasePlayer)
+                {
+                    Instance.OnPlayerEnterZone(baseEntity as BasePlayer, this);
+                    return;
+                }
+
+                Instance.OnEntityEnterZone(baseEntity, this);
+                */
         #region General
 
         #region Structs
@@ -75,6 +88,71 @@ namespace Oxide.Plugins
         #endregion
 
         #region Classes
+        public class Trigger : MonoBehaviour
+        {
+            internal Collider collider;
+            internal Rigidbody rigidbody;
+            /*Vector3 size;
+            Vector3 pos;
+            Quaternion rot;*/
+            /*public Trigger(Vector3 size, Vector3 pos, Quaternion rot)
+            {
+                this.size = size;
+                this.pos = pos;
+                this.rot = rot;
+            }*/
+            private void OnTriggerEnter(Collider other)
+            {
+                foreach (var person in BasePlayer.activePlayerList)
+                {
+                    person.ChatMessage("Test3" + other.gameObject.name);
+                }
+            }
+            private void OnTriggerExit(Collider other)
+            {
+                foreach (var person in BasePlayer.activePlayerList)
+                {
+                    person.ChatMessage(other.gameObject.name);
+                }
+            }
+            public void InitTrigger(Vector3 size, Vector3 pos, Quaternion rot)
+            {
+                /*BoxCollider boxCollider;
+
+                boxCollider = gameObject.AddComponent<BoxCollider>();
+                boxCollider.isTrigger = true;
+                boxCollider.transform.position = pos;
+                boxCollider.transform.rotation = rot;
+                boxCollider.size = size;*/
+
+                transform.position = pos;
+                transform.rotation = rot;
+
+                if (collider != null)
+                    DestroyImmediate(collider);
+
+                if (rigidbody != null)
+                    DestroyImmediate(rigidbody);
+
+                rigidbody = gameObject.AddComponent<Rigidbody>();
+                rigidbody.useGravity = false;
+                rigidbody.isKinematic = true;
+                rigidbody.detectCollisions = true;
+                rigidbody.collisionDetectionMode = CollisionDetectionMode.Discrete;
+
+                BoxCollider boxCollider = gameObject.GetComponent<BoxCollider>();
+
+                    if (boxCollider == null)
+                    {
+                        boxCollider = gameObject.AddComponent<BoxCollider>();
+                        boxCollider.isTrigger = true;
+                    }
+                    boxCollider.size = size;
+                    //bounds = boxCollider.bounds;
+                    collider = boxCollider;
+            }
+        }
+
         public class Minigamer
         {
             //General
@@ -113,7 +191,7 @@ namespace Oxide.Plugins
             }
             public BasePlayer.SpawnPoint getSpawn()
             {
-                Test();
+                //Test();
                 return game.getPlayerSpawn();
             }
         }
@@ -212,15 +290,16 @@ namespace Oxide.Plugins
         {
             static Kit kit = kits[3][0];
             private Vector3 hubSpawn = new Vector3(42.6f, 45.0f, -232.7f);
-            private TriggerTemperature trigger;
+            //private TriggerTemperature trigger;
             public HubGame(Vector3 hubSpawn)
             {
                 this.hubSpawn = hubSpawn;
-                trigger = new TriggerTemperature() { triggerSize = 10.0f, enabled = true };
-                trigger.transform.position = hubSpawn;
+                //trigger = new TriggerTemperature() { triggerSize = 10.0f/*, enabled = true*/ };
+                //trigger.transform.position = hubSpawn;
                 GameName = "Hub";
                 players = new List<BasePlayer>();
                 playerMax = 100;
+                CreateTrigger(new Vector3(10.0f, 1.0f, 10.0f), hubSpawn, new Quaternion());
             }
             public override void playerLeaveGame(BasePlayer player)
             {
@@ -261,7 +340,7 @@ namespace Oxide.Plugins
                 //Test();
                 return new BasePlayer.SpawnPoint() { pos = hubSpawn, rot = new Quaternion() };
             }
-            public override void OnTriggerEnter(TriggerBase trigger, BasePlayer player)
+            /*public override void OnTriggerEnter(TriggerBase trigger, BasePlayer player)
             {
                 if (this.trigger = trigger as TriggerTemperature)
                 {
@@ -275,7 +354,7 @@ namespace Oxide.Plugins
                     player.inventory.Strip();
                     player.Heal(100.0f);
                 }
-            }
+            }*/
         }
 
         public class PvPGame : Game
@@ -395,7 +474,7 @@ namespace Oxide.Plugins
                         }
                     }
                 }
-                new Timer
+                /*new Timer
                 Timer timer = timer.Repeat(time, 1, () =>
                 {
                     if (isGame)
@@ -408,10 +487,10 @@ namespace Oxide.Plugins
                 Timer myTimer = timer.Repeat(3f, () =>
                 {
                     Puts("Hello world!");
-                });
+                });*/
             }
 
-            void Wave()
+            /*void Wave()
             {
                 waveCount += 1;
                 PrintToChat(string.Format(Lang["NewWave"], waveCount));
@@ -427,7 +506,7 @@ namespace Oxide.Plugins
                         }
                     }
                 }
-            }
+            }*/
         }
 
         public class redeem
@@ -834,6 +913,12 @@ namespace Oxide.Plugins
 
         #region Methods
 
+        static void CreateTrigger(Vector3 size, Vector3 pos, Quaternion rot)
+        {
+            Trigger trigger = new GameObject().AddComponent<Trigger>();
+            trigger.InitTrigger(size, pos, rot);
+        }
+
         static void Test()
         {
             if (isDebug)
@@ -981,6 +1066,7 @@ namespace Oxide.Plugins
 
         private void OnEntityEnter(TriggerBase trigger, BaseEntity entity)
         {
+            PrintToChat(trigger.name, entity.name);
             if (entity is BasePlayer && entity as BasePlayer != null)
             {
                 getMinigamer(entity as BasePlayer).game.OnTriggerEnter(trigger, entity as BasePlayer);
@@ -1154,7 +1240,13 @@ namespace Oxide.Plugins
 
         #region SurvivalArena
 
-        void checkIsEnemiesDead()
+        #region Methods
+
+
+
+        #endregion
+
+        /*void checkIsEnemiesDead()
         {
             if (Enemies.Count == 0)
             {
@@ -1246,7 +1338,7 @@ namespace Oxide.Plugins
                     Enemies[Enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true);
                     Enemies[Enemies.Count - 1].Spawn();
                 }
-                else */
+                else 
                 if (i % 3 == 0)
                 {
                     BaseEntity enemy2 = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true);
@@ -1279,7 +1371,7 @@ namespace Oxide.Plugins
                 Enemies[Enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true);
                 Enemies[Enemies.Count - 1].Spawn();
             }
-        }
+        }*/
     }
 
     //Data
@@ -2033,7 +2125,7 @@ namespace Oxide.Plugins
                 addOrder(vendingMachine8.GetComponent<VendingMachine>(), -484206264, 1, -932201673, 150);//blue card*/
 
                 //GameManager.server.CreateEntity("assets/prefabs/deployable/tier 1 workbench/workbench1.deployed.prefab", workbenchPos, workbenchRot, true).Spawn();
-            }
+            //}
 
             /*void setOrders(VendingMachine vendingMachine, int ordersID)
             {
@@ -2263,4 +2355,4 @@ namespace Oxide.Plugins
 
 
                                                    }*/
-        }
+        

@@ -1,9 +1,17 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using Facepunch;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
+using Newtonsoft.Json.Linq;
 using Oxide.Core;
+using Oxide.Core.Configuration;
+using Oxide.Core.Plugins;
 using Oxide.Game.Rust.Cui;
+using Rust;
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
 using UnityEngine;
 using Random = System.Random;
 //goodnight gamers
@@ -90,8 +98,10 @@ namespace Oxide.Plugins
         #region Classes
         public class Trigger : MonoBehaviour
         {
+            Game game;
             internal Collider collider;
-            internal Rigidbody rigidbody;
+            internal Bounds bounds;
+            private Rigidbody rigidbody;
             /*Vector3 size;
             Vector3 pos;
             Quaternion rot;*/
@@ -101,21 +111,25 @@ namespace Oxide.Plugins
                 this.pos = pos;
                 this.rot = rot;
             }*/
-            private void OnTriggerEnter(Collider other)
+            private void Awake()
             {
-                foreach (var person in BasePlayer.activePlayerList)
-                {
-                    person.ChatMessage("Test3" + other.gameObject.name);
-                }
+                gameObject.layer = (int)Layer.Reserved1;
+                gameObject.name = "Trigger";
             }
-            private void OnTriggerExit(Collider other)
+
+            private void OnTriggerEnter(Collider collider)
             {
-                foreach (var person in BasePlayer.activePlayerList)
-                {
-                    person.ChatMessage(other.gameObject.name);
-                }
+                BaseEntity baseEntity = collider?.ToBaseEntity();
+                if (!baseEntity.IsValid()) return;
+                game.OnTriggerEnter(this, baseEntity);
             }
-            public void InitTrigger(Vector3 size, Vector3 pos, Quaternion rot)
+            private void OnTriggerExit(Collider collider)
+            {
+                BaseEntity baseEntity = collider?.ToBaseEntity();
+                if (!baseEntity.IsValid()) return;
+                game.OnTriggerExit(this, baseEntity);
+            }
+            public void InitTrigger(Vector3 size, Vector3 pos, Quaternion rot, Game game, string name)
             {
                 /*BoxCollider boxCollider;
 
@@ -124,7 +138,8 @@ namespace Oxide.Plugins
                 boxCollider.transform.position = pos;
                 boxCollider.transform.rotation = rot;
                 boxCollider.size = size;*/
-
+                this.game = game;
+                this.name = name;
                 transform.position = pos;
                 transform.rotation = rot;
 
@@ -148,14 +163,21 @@ namespace Oxide.Plugins
                         boxCollider.isTrigger = true;
                     }
                     boxCollider.size = size;
-                    //bounds = boxCollider.bounds;
+                    bounds = boxCollider.bounds;
                     collider = boxCollider;
+                game.triggers.Add(this);
+            }
+            public void deconstruct()
+            {
+                DestroyImmediate(collider);
+                DestroyImmediate(rigidbody);
             }
         }
 
         public class Minigamer
         {
             //General
+            public bool isInvulnerable = false;
             public static List<BasePlayer> players = new List<BasePlayer>();
             public BasePlayer player;
             public Game game = null;
@@ -198,6 +220,7 @@ namespace Oxide.Plugins
 
         public class Game
         {
+            public List<Trigger> triggers;
             public string GameName;
             public List<BasePlayer> players = new List<BasePlayer>();
             public int playerMax;
@@ -233,11 +256,11 @@ namespace Oxide.Plugins
                 checkIsOpen();
                 broadcastToPlayers(string.Format(Lang["PlayerJoined"], player.displayName));
             }
-            virtual public void OnTriggerEnter(TriggerBase trigger, BasePlayer player)
+            virtual public void OnTriggerEnter(Trigger trigger, BaseEntity entity)
             {
 
             }
-            virtual public void OnTriggerExit(TriggerBase trigger, BasePlayer player)
+            virtual public void OnTriggerExit(Trigger trigger, BaseEntity entity)
             {
 
             }
@@ -290,6 +313,7 @@ namespace Oxide.Plugins
         {
             static Kit kit = kits[3][0];
             private Vector3 hubSpawn = new Vector3(42.6f, 45.0f, -232.7f);
+            private Vector3 triggerSpawn = new Vector3(42.6f, 38.0f, -232.7f);
             //private TriggerTemperature trigger;
             public HubGame(Vector3 hubSpawn)
             {
@@ -299,7 +323,8 @@ namespace Oxide.Plugins
                 GameName = "Hub";
                 players = new List<BasePlayer>();
                 playerMax = 100;
-                CreateTrigger(new Vector3(10.0f, 1.0f, 10.0f), hubSpawn, new Quaternion());
+                triggers = new List<Trigger>();
+                CreateTrigger(new Vector3(50.0f, 10.0f, 50.0f), triggerSpawn/* - new Vector3(hubSpawn.x, hubSpawn.y - 4.0f, hubSpawn.z)*/, new Quaternion(), this, "PvPPit");
             }
             public override void playerLeaveGame(BasePlayer player)
             {
@@ -316,11 +341,13 @@ namespace Oxide.Plugins
             }
             public override void playerJoinGame(BasePlayer player)
             {
+                getMinigamer(player).isInvulnerable = true;
                 players.Add(player);
                 UpdatePlayers();
                 checkIsOpen();
                 player.inventory.Strip();
                 player.Heal(100.0f);
+                player.metabolism.bleeding = new MetabolismAttribute {value = 0.0f};
                 player.Teleport(hubSpawn);
                 if (isDebug)
                 {
@@ -340,21 +367,33 @@ namespace Oxide.Plugins
                 //Test();
                 return new BasePlayer.SpawnPoint() { pos = hubSpawn, rot = new Quaternion() };
             }
-            /*public override void OnTriggerEnter(TriggerBase trigger, BasePlayer player)
+            public override void OnTriggerEnter(Trigger trigger, BaseEntity entity)
             {
-                if (this.trigger = trigger as TriggerTemperature)
+                switch (trigger.name)
                 {
-                    kit.givePlayerKit(player);
+                    case "PvPPit":
+                        if (entity is BasePlayer)
+                        {
+                            BasePlayer player = entity.ToPlayer();
+                            kit.givePlayerKit(player);
+                            getMinigamer(player).isInvulnerable = false;
+                        }
+                        break;
+                    default:
+                        break;
                 }
             }
-            public override void OnTriggerExit(TriggerBase trigger, BasePlayer player)
+            public override void OnTriggerExit(Trigger trigger, BaseEntity entity)
             {
-                if (this.trigger = trigger as TriggerTemperature)
+                if (entity is BasePlayer)
                 {
+                    BasePlayer player = entity.ToPlayer();
                     player.inventory.Strip();
                     player.Heal(100.0f);
+                    player.metabolism.bleeding = new MetabolismAttribute { value = 0.0f };
+                    getMinigamer(player).isInvulnerable = true;
                 }
-            }*/
+            }
         }
 
         public class PvPGame : Game
@@ -385,6 +424,7 @@ namespace Oxide.Plugins
             }
             public override void playerJoinGame(BasePlayer player)
             {
+                getMinigamer(player).isInvulnerable = false;
                 players.Add(player);
                 UpdatePlayers();
                 checkIsOpen();
@@ -878,13 +918,17 @@ namespace Oxide.Plugins
                 {
                     if (args[0] == Game.GameName)
                     {
-                        if (Game.isOpen)
+                        if (Game == minigamer.game)
                         {
-                            if (minigamer.isInGame()) minigamer.leaveGame();
-                            minigamer.joinGame(Game);
-                            return;
+                            if (Game.isOpen)
+                            {
+                                if (minigamer.isInGame()) minigamer.leaveGame();
+                                minigamer.joinGame(Game);
+                                return;
+                            }
+                            else player.ChatMessage(Lang["GameFull"]);
                         }
-                        else player.ChatMessage(Lang["GameFull"]);
+                        else player.ChatMessage(Lang["InGame"]);
                     }
                 }
                 player.ChatMessage(string.Format(Lang["BadGameName"], args[0]));
@@ -913,10 +957,10 @@ namespace Oxide.Plugins
 
         #region Methods
 
-        static void CreateTrigger(Vector3 size, Vector3 pos, Quaternion rot)
+        static void CreateTrigger(Vector3 size, Vector3 pos, Quaternion rot, Game game, string name)
         {
             Trigger trigger = new GameObject().AddComponent<Trigger>();
-            trigger.InitTrigger(size, pos, rot);
+            trigger.InitTrigger(size, pos, rot, game, name);
         }
 
         static void Test()
@@ -981,6 +1025,7 @@ namespace Oxide.Plugins
             {"DebugOff", "Debug mode disabled."},
             {"BadGameName", "Could not find game {0}, please try a different name. Do /Games to get a list of games."},
             {"NotInGame", "You are not currently in a game."},
+            {"InGame", "You are already in that game."},
             {"PlayerJoinedServer", "{0} has joined the server!"},
             {"PlayerLeftServer", "{0} has left the server."},
             {"GameFull", "That game is currently full."},
@@ -1013,7 +1058,7 @@ namespace Oxide.Plugins
 
         public void OnServerInitialized()
         {
-
+            //
             /*private Rigidbody rigidbody;
 
             internal Collider collider;
@@ -1044,6 +1089,19 @@ namespace Oxide.Plugins
             }*/
         }
 
+        void OnPlayerHealthChange(BasePlayer player, float oldValue, float newValue)
+        {
+            //
+            //
+            try
+            {
+                if (getMinigamer(player).isInvulnerable) player.Heal(100.0f);
+            }
+            catch
+            {
+            }
+        }
+
         public void Loaded()
         {
             redeems = redeems.OrderByDescending(m => m.requirement).ToArray();
@@ -1051,6 +1109,16 @@ namespace Oxide.Plugins
             foreach(var Game in Games)
             {
                 Game.UpdatePlayers();
+            }
+        }
+        public void Unloaded()
+        {
+            foreach(var game in Games)
+            {
+                for(int i = 0; i >= game.triggers.Count; i++)
+                {
+                    game.triggers[i].deconstruct();
+                }
             }
         }
 
@@ -1064,7 +1132,7 @@ namespace Oxide.Plugins
             }
         }
 
-        private void OnEntityEnter(TriggerBase trigger, BaseEntity entity)
+        /*private void OnEntityEnter(TriggerBase trigger, BaseEntity entity)
         {
             PrintToChat(trigger.name, entity.name);
             if (entity is BasePlayer && entity as BasePlayer != null)
@@ -1078,7 +1146,7 @@ namespace Oxide.Plugins
             {
                 getMinigamer(entity as BasePlayer).game.OnTriggerExit(trigger, entity as BasePlayer);
             }
-        }
+        }*/
 
         object OnPlayerRespawn(BasePlayer player)
         {

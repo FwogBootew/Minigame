@@ -631,25 +631,255 @@ namespace Oxide.Plugins
         #region Variables
 
         private static List<Minigamer> Minigamers = new List<Minigamer>();
-        List<Game> Games = new List<Game>
-        {
-            new HubGame(new Vector3(42.6f, 45.0f, -232.7f)),
-            new PvPGame(new Vector3[]
-            {
-                new Vector3(-196.5f, 40.0f, -57.0f),
-                new Vector3(-226.2f, 40.0f, -67.4f),
-                new Vector3(-191.6f, 40.1f, -123.1f),
-                new Vector3(-187.3f, 40.0f, -89.9f),
-                new Vector3(-219.3f, 40.0f, -122.4f),
-                new Vector3(-231.7f, 40.3f, -105.9f),
-                new Vector3(-186.6f, 40.3f, -74.3f),
-            }),
-            new SurvivalGame(new Vector3(), new Vector3(), new Vector3[]{ }, new Vector3(), new Vector3(), new Vector3())
-        };
+        List<Game> Games;
 
         static bool isDebug = false;
 
-        public static Kit[][] kits = new Kit[][]
+        public static Kit[][] kits;
+
+        #endregion
+
+        #region Commands
+
+        [ChatCommand("Debug")]
+        void ccDebug(BasePlayer player)
+        {
+            if (player.IsAdmin)
+            {
+                if (isDebug) isDebug = false;
+                else isDebug = true;
+                return;
+            }
+            player.ChatMessage(Lang["NoUse"]);
+        }
+
+        [ChatCommand("Test")]
+        void ccTest(BasePlayer player)
+        {
+            if (player.IsAdmin)
+            {
+                try
+                {
+                    PrintToChat(getMinigamer(player).game.GameName);
+                }
+                catch
+                {
+                    PrintToChat("oof");
+                }
+                //OnPlayerInit(player);
+                writeData<int>(0, "MinigameData/PvPData/" + player.displayName + "C");
+                writeData<int>(0, "MinigameData/PvPData/" + player.displayName + "K");
+                foreach (var redeem in redeems)
+                {
+                    writeData<int>(0, "MinigameData/PvPData/" + player.displayName + redeem.name);
+                }
+                PrintToChat("people 1");
+                foreach (var person in Games[0].players)
+                {
+                    PrintToChat(person.displayName);
+                }
+                PrintToChat("people 2");
+                foreach (var person in Games[1].players)
+                {
+                    PrintToChat(person.displayName);
+                }
+                return;
+            }
+            player.ChatMessage(Lang["NoUse"]);
+        }
+
+        [ChatCommand("Pos")]
+        void ccPos(BasePlayer player)
+        {
+            if (player.IsAdmin)
+            {
+                player.ChatMessage(player.ServerPosition.ToString());
+                return;
+            }
+            player.ChatMessage(Lang["NoUse"]);
+        }
+
+        [ChatCommand("Join")]
+        void ccJoin(BasePlayer player, string msg, string[] args)
+        {
+            //add if in specified game already
+            Minigamer minigamer = getMinigamer(player);
+            if (args.Length == 1)
+            {
+                foreach (var Game in Games)
+                {
+                    if (args[0] == Game.GameName)
+                    {
+                        if (Game == minigamer.game)
+                        {
+                            if (Game.isOpen)
+                            {
+                                if (minigamer.isInGame()) minigamer.leaveGame();
+                                minigamer.joinGame(Game);
+                                return;
+                            }
+                            else player.ChatMessage(Lang["GameFull"]);
+                        }
+                        else player.ChatMessage(Lang["InGame"]);
+                    }
+                }
+                player.ChatMessage(string.Format(Lang["BadGameName"], args[0]));
+            }
+            else
+            {
+                player.ChatMessage(Lang["BadArgs"]);
+            }
+        }
+        [ChatCommand("Leave")]
+        void ccLeave(BasePlayer player, string msg, string[] args)
+        {
+            Minigamer minigamer = getMinigamer(player);
+            if (minigamer.game == Games[0])
+            {
+                player.ChatMessage(Lang["NotInGame"]);
+            }
+            else
+            {
+                minigamer.leaveGame();
+                minigamer.joinGame(Games[0]);
+            }
+        }
+
+        #endregion
+
+        #region Methods
+
+        static void CreateTrigger(Vector3 size, Vector3 pos, Quaternion rot, Game game, string name)
+        {
+            Trigger trigger = new GameObject().AddComponent<Trigger>();
+            trigger.InitTrigger(size, pos, rot, game, name);
+        }
+
+        static void Test()
+        {
+            if (isDebug)
+            {
+                foreach (var player in BasePlayer.activePlayerList)
+                {
+                    if (player.IsAdmin) player.ChatMessage("Test");
+                }
+            }
+        }
+
+        T readData<T>(string path)
+        {
+            return JsonConvert.DeserializeObject<T>(Interface.Oxide.DataFileSystem.ReadObject<string>(path));
+        }
+
+        void writeData<T>(T data, string path)
+        {
+            string dataString = JsonConvert.SerializeObject(data);
+            Interface.Oxide.DataFileSystem.WriteObject(path, dataString);
+        }
+
+        private static Minigamer getMinigamer(BasePlayer player)
+        {
+            foreach (var Minigamer in Minigamers)
+            {
+                if (Minigamer.player.GetHashCode() == player.GetHashCode())
+                {
+                    return Minigamer;
+                }
+            }
+            return null;
+        }
+
+        bool isInGame(BasePlayer player)
+        {
+            foreach (var Minigamer in Minigamers)
+            {
+                if (Minigamer.player == player)
+                {
+                    if (Minigamer.isInGame()) return true;
+                    else return false;
+                }
+            }
+            return false;
+        }
+
+        #endregion
+
+        #region Data
+
+        public static Dictionary<string, string> Lang = new Dictionary<string, string>
+            {
+            //General
+            {"BadArgs", "Invalid Arguements."},
+            {"NoUse", "You may not use this command."},
+            {"PlayerJoined", "{0} has joined the game!"},
+            {"PlayerLeft", "{0} has left the game."},
+            {"DebugOn", "Debug mode enabled."},
+            {"DebugOff", "Debug mode disabled."},
+            {"BadGameName", "Could not find game {0}, please try a different name. Do /Games to get a list of games."},
+            {"NotInGame", "You are not currently in a game."},
+            {"InGame", "You are already in that game."},
+            {"PlayerJoinedServer", "{0} has joined the server!"},
+            {"PlayerLeftServer", "{0} has left the server."},
+            {"GameFull", "That game is currently full."},
+            //Survival
+            {"DebugEnemyList", "The following are the entites in the enemies list: {0}."},
+            {"DebugWave", "Starting Wave {0} in {1} seconds."},
+            {"HasJoined", "You have already joined the game."},
+            {"DidJoin", "You have joined the game, please wait for the next one to start."},
+            {"DidLeave", "You have left the game."},
+            {"HasLeft", "You have not joined a game."},
+            {"NewWave", "Beginning Wave {0}!"},
+            {"AllDead", "Wave over, all enemies have died. 60 Seconds until next Wave."},
+            {"GameOver", "All Players have died, game over."},
+            {"Kicked", "You have been kicked from the game because you died, you must rejoin to play in the next game."},
+            {"SetTime", "Set Wave Time to {0} seconds."},
+            {"NoObject", "No Object."},
+            //PvP
+            {"NoRedeem", "You do not have any of those redeems."},
+            {"Redeemed", "You succesfully redeemed {0}."},
+            {"ChoseClass", "You've chosen class {0}."},
+            {"CurrentClass", "You're currently class {0}."},
+            {"NotClass", "That isn't a class."},
+
+            };
+
+        #endregion
+
+        #region Hooks
+
+        void OnServerInitialized()
+        {
+            //
+            /*private Rigidbody rigidbody;
+
+            internal Collider collider;
+
+            internal Bounds bounds;
+            rigidbody = gameObject.AddComponent<Rigidbody>();
+            rigidbody.useGravity = false;
+            rigidbody.isKinematic = true;
+            rigidbody.detectCollisions = true;
+            rigidbody.collisionDetectionMode = CollisionDetectionMode.Discrete;
+
+            SphereCollider sphereCollider = gameObject.GetComponent<SphereCollider>();
+            BoxCollider boxCollider = gameObject.GetComponent<BoxCollider>();
+
+            if (definition.Size != Vector3.zero)
+            {
+                if (sphereCollider != null)
+                    Destroy(sphereCollider);
+
+                if (boxCollider == null)
+                {
+                    boxCollider = gameObject.AddComponent<BoxCollider>();
+                    boxCollider.isTrigger = true;
+                }
+                boxCollider.size = definition.Size;
+                bounds = boxCollider.bounds;
+                collider = boxCollider;
+            }*/
+            
+            kits = new Kit[][]
 {
             //Level-1
             new Kit[]
@@ -845,248 +1075,33 @@ namespace Oxide.Plugins
         }
 };
 
-        #endregion
-
-        #region Commands
-
-        [ChatCommand("Debug")]
-        void ccDebug(BasePlayer player)
+            redeems = new redeem[]
         {
-            if (player.IsAdmin)
+            new redeemL96(),
+            new redeemLauncher(),
+            new redeemGloves(),
+            new redeemM249()
+        };
+            Games = new List<Game>
             {
-                if (isDebug) isDebug = false;
-                else isDebug = true;
-                return;
-            }
-            player.ChatMessage(Lang["NoUse"]);
-        }
-
-        [ChatCommand("Test")]
-        void ccTest(BasePlayer player)
-        {
-            if (player.IsAdmin)
+                new HubGame(new Vector3(42.6f, 45.0f, -232.7f)),
+            new PvPGame(new Vector3[]
             {
-                try
-                {
-                    PrintToChat(getMinigamer(player).game.GameName);
-                }
-                catch
-                {
-                    PrintToChat("oof");
-                }
-                OnPlayerInit(player);
-                writeData<int>(0, "MinigameData/PvPData/" + player.displayName + "C");
-                writeData<int>(0, "MinigameData/PvPData/" + player.displayName + "K");
-                foreach (var redeem in redeems)
-                {
-                    writeData<int>(0, "MinigameData/PvPData/" + player.displayName + redeem.name);
-                }
-                PrintToChat("people 1");
-                foreach (var person in Games[0].players)
-                {
-                    PrintToChat(person.displayName);
-                }
-                PrintToChat("people 2");
-                foreach (var person in Games[1].players)
-                {
-                    PrintToChat(person.displayName);
-                }
-                return;
-            }
-            player.ChatMessage(Lang["NoUse"]);
-        }
-
-        [ChatCommand("Pos")]
-        void ccPos(BasePlayer player)
-        {
-            if (player.IsAdmin)
-            {
-                player.ChatMessage(player.ServerPosition.ToString());
-                return;
-            }
-            player.ChatMessage(Lang["NoUse"]);
-        }
-
-        [ChatCommand("Join")]
-        void ccJoin(BasePlayer player, string msg, string[] args)
-        {
-            //add if in specified game already
-            Minigamer minigamer = getMinigamer(player);
-            if (args.Length == 1)
-            {
-                foreach (var Game in Games)
-                {
-                    if (args[0] == Game.GameName)
-                    {
-                        if (Game == minigamer.game)
-                        {
-                            if (Game.isOpen)
-                            {
-                                if (minigamer.isInGame()) minigamer.leaveGame();
-                                minigamer.joinGame(Game);
-                                return;
-                            }
-                            else player.ChatMessage(Lang["GameFull"]);
-                        }
-                        else player.ChatMessage(Lang["InGame"]);
-                    }
-                }
-                player.ChatMessage(string.Format(Lang["BadGameName"], args[0]));
-            }
-            else
-            {
-                player.ChatMessage(Lang["BadArgs"]);
-            }
-        }
-        [ChatCommand("Leave")]
-        void ccLeave(BasePlayer player, string msg, string[] args)
-        {
-            Minigamer minigamer = getMinigamer(player);
-            if (minigamer.game == Games[0])
-            {
-                player.ChatMessage(Lang["NotInGame"]);
-            }
-            else
-            {
-                minigamer.leaveGame();
-                minigamer.joinGame(Games[0]);
-            }
-        }
-
-        #endregion
-
-        #region Methods
-
-        static void CreateTrigger(Vector3 size, Vector3 pos, Quaternion rot, Game game, string name)
-        {
-            Trigger trigger = new GameObject().AddComponent<Trigger>();
-            trigger.InitTrigger(size, pos, rot, game, name);
-        }
-
-        static void Test()
-        {
-            if (isDebug)
-            {
-                foreach (var player in BasePlayer.activePlayerList)
-                {
-                    if (player.IsAdmin) player.ChatMessage("Test");
-                }
-            }
-        }
-
-        T readData<T>(string path)
-        {
-            return JsonConvert.DeserializeObject<T>(Interface.Oxide.DataFileSystem.ReadObject<string>(path));
-        }
-
-        void writeData<T>(T data, string path)
-        {
-            string dataString = JsonConvert.SerializeObject(data);
-            Interface.Oxide.DataFileSystem.WriteObject(path, dataString);
-        }
-
-        private static Minigamer getMinigamer(BasePlayer player)
-        {
-            foreach (var Minigamer in Minigamers)
-            {
-                if (Minigamer.player.GetHashCode() == player.GetHashCode())
-                {
-                    return Minigamer;
-                }
-            }
-            return null;
-        }
-
-        bool isInGame(BasePlayer player)
-        {
-            foreach (var Minigamer in Minigamers)
-            {
-                if (Minigamer.player == player)
-                {
-                    if (Minigamer.isInGame()) return true;
-                    else return false;
-                }
-            }
-            return false;
-        }
-
-        #endregion
-
-        #region Data
-
-        public static Dictionary<string, string> Lang = new Dictionary<string, string>
-            {
-            //General
-            {"BadArgs", "Invalid Arguements."},
-            {"NoUse", "You may not use this command."},
-            {"PlayerJoined", "{0} has joined the game!"},
-            {"PlayerLeft", "{0} has left the game."},
-            {"DebugOn", "Debug mode enabled."},
-            {"DebugOff", "Debug mode disabled."},
-            {"BadGameName", "Could not find game {0}, please try a different name. Do /Games to get a list of games."},
-            {"NotInGame", "You are not currently in a game."},
-            {"InGame", "You are already in that game."},
-            {"PlayerJoinedServer", "{0} has joined the server!"},
-            {"PlayerLeftServer", "{0} has left the server."},
-            {"GameFull", "That game is currently full."},
-            //Survival
-            {"DebugEnemyList", "The following are the entites in the enemies list: {0}."},
-            {"DebugWave", "Starting Wave {0} in {1} seconds."},
-            {"HasJoined", "You have already joined the game."},
-            {"DidJoin", "You have joined the game, please wait for the next one to start."},
-            {"DidLeave", "You have left the game."},
-            {"HasLeft", "You have not joined a game."},
-            {"NewWave", "Beginning Wave {0}!"},
-            {"AllDead", "Wave over, all enemies have died. 60 Seconds until next Wave."},
-            {"GameOver", "All Players have died, game over."},
-            {"InGame", "You may not join, a game is already in session."},
-            {"Kicked", "You have been kicked from the game because you died, you must rejoin to play in the next game."},
-            {"SetTime", "Set Wave Time to {0} seconds."},
-            {"NoObject", "No Object."},
-            //PvP
-            {"NoRedeem", "You do not have any of those redeems."},
-            {"Redeemed", "You succesfully redeemed {0}."},
-            {"ChoseClass", "You've chosen class {0}."},
-            {"CurrentClass", "You're currently class {0}."},
-            {"NotClass", "That isn't a class."},
-
+                new Vector3(-196.5f, 40.0f, -57.0f),
+                new Vector3(-226.2f, 40.0f, -67.4f),
+                new Vector3(-191.6f, 40.1f, -123.1f),
+                new Vector3(-187.3f, 40.0f, -89.9f),
+                new Vector3(-219.3f, 40.0f, -122.4f),
+                new Vector3(-231.7f, 40.3f, -105.9f),
+                new Vector3(-186.6f, 40.3f, -74.3f),
+            }),
+            new SurvivalGame(new Vector3(), new Vector3(), new Vector3[]{ }, new Vector3(), new Vector3(), new Vector3())
             };
 
-        #endregion
-
-        #region Hooks
-
-        public void OnServerInitialized()
-        {
-            //
-            /*private Rigidbody rigidbody;
-
-            internal Collider collider;
-
-            internal Bounds bounds;
-            rigidbody = gameObject.AddComponent<Rigidbody>();
-            rigidbody.useGravity = false;
-            rigidbody.isKinematic = true;
-            rigidbody.detectCollisions = true;
-            rigidbody.collisionDetectionMode = CollisionDetectionMode.Discrete;
-
-            SphereCollider sphereCollider = gameObject.GetComponent<SphereCollider>();
-            BoxCollider boxCollider = gameObject.GetComponent<BoxCollider>();
-
-            if (definition.Size != Vector3.zero)
+            foreach (var Game in Games)
             {
-                if (sphereCollider != null)
-                    Destroy(sphereCollider);
-
-                if (boxCollider == null)
-                {
-                    boxCollider = gameObject.AddComponent<BoxCollider>();
-                    boxCollider.isTrigger = true;
-                }
-                boxCollider.size = definition.Size;
-                bounds = boxCollider.bounds;
-                collider = boxCollider;
-            }*/
+                Game.UpdatePlayers();
+            }
         }
 
         void OnPlayerHealthChange(BasePlayer player, float oldValue, float newValue)
@@ -1102,17 +1117,16 @@ namespace Oxide.Plugins
             }
         }
 
-        public void Loaded()
+        void Loaded()
         {
-            redeems = redeems.OrderByDescending(m => m.requirement).ToArray();
-            redeems.Reverse();
-            foreach(var Game in Games)
-            {
-                Game.UpdatePlayers();
-            }
+            Puts("Loaded");
+            //redeems = redeems.OrderByDescending(m => m.requirement).ToArray();
+            //redeems.Reverse();
+            
         }
-        public void Unloaded()
+        void Unloaded()
         {
+            kits = null;
             foreach(var game in Games)
             {
                 for(int i = 0; i >= game.triggers.Count; i++)
@@ -1150,20 +1164,51 @@ namespace Oxide.Plugins
 
         object OnPlayerRespawn(BasePlayer player)
         {
-            BasePlayer.SpawnPoint spawnPoint = getMinigamer(player).getSpawn();
-            return spawnPoint;
+            try
+            {
+                BasePlayer.SpawnPoint spawnPoint = getMinigamer(player).getSpawn();
+                return spawnPoint;
+            }
+            catch
+            {
+                //Minigamers.Add(new Minigamer(player, Games[0]));
+                BasePlayer.SpawnPoint spawnPoint = Games[0].getPlayerSpawn();
+                return spawnPoint;
+            }
+                
         }
 
         void OnPlayerRespawned(BasePlayer player)
         {
-            getMinigamer(player).game.OnPlayerRespawn(player);
+            try
+            {
+                getMinigamer(player).game.OnPlayerRespawn(player);
+            }
+            catch
+            {
+                Games[0].OnPlayerRespawn(player);
+            }
         }
 
-        void OnPlayerInit(BasePlayer player)
+        /*void OnPlayerInit(BasePlayer player)
         {
             Minigamers.Add(new Minigamer(player, Games[0]));
             //getMinigamer(player).game.playerJoinGame(player);
             PrintToChat(string.Format(Lang["PlayerJoinedServer"], player.displayName));
+        }*/
+
+        void OnPlayerSleepEnded(BasePlayer player)
+        {
+            try
+            {
+                getMinigamer(player);
+            }
+            catch
+            {
+                Minigamers.Add(new Minigamer(player, Games[0]));
+                PrintToChat(string.Format(Lang["PlayerJoinedServer"], player.displayName));
+                //getMinigamer(player).game.playerJoinGame(player);
+            }
         }
 
         void OnPlayerDisconnected(BasePlayer player)
@@ -1225,13 +1270,7 @@ namespace Oxide.Plugins
 
         #region Variables
 
-        redeem[] redeems = new redeem[]
-        {
-            new redeemL96(),
-            new redeemLauncher(),
-            new redeemGloves(),
-            new redeemM249()
-        };
+        redeem[] redeems;
 
         #endregion
 

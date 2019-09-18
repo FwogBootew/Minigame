@@ -38,6 +38,21 @@ namespace Oxide.Plugins
 
         #region Structs
 
+        public struct TriggerInfo
+        {
+            public Vector3 size;
+            public Vector3 pos;
+            public Quaternion rot;
+            public string name;
+            public TriggerInfo(Vector3 size, Vector3 pos, Quaternion rot, string name)
+            {
+                this.size = size;
+                this.pos = pos;
+                this.rot = rot;
+                this.name = name;
+            }
+        }
+
         public struct Kit
         {
             Item[] attire;
@@ -98,10 +113,10 @@ namespace Oxide.Plugins
         #region Classes
         public class Trigger : MonoBehaviour
         {
-            Game game;
             internal Collider collider;
             internal Bounds bounds;
             private Rigidbody rigidbody;
+            public Game game;
             /*Vector3 size;
             Vector3 pos;
             Quaternion rot;*/
@@ -116,7 +131,6 @@ namespace Oxide.Plugins
                 gameObject.layer = (int)Layer.Reserved1;
                 gameObject.name = "Trigger";
             }
-
             private void OnTriggerEnter(Collider collider)
             {
                 BaseEntity baseEntity = collider?.ToBaseEntity();
@@ -129,7 +143,7 @@ namespace Oxide.Plugins
                 if (!baseEntity.IsValid()) return;
                 game.OnTriggerExit(this, baseEntity);
             }
-            public void InitTrigger(Vector3 size, Vector3 pos, Quaternion rot, Game game, string name)
+            public void InitTrigger(Vector3 size, Vector3 pos, Quaternion rot, string name)
             {
                 /*BoxCollider boxCollider;
 
@@ -138,7 +152,6 @@ namespace Oxide.Plugins
                 boxCollider.transform.position = pos;
                 boxCollider.transform.rotation = rot;
                 boxCollider.size = size;*/
-                this.game = game;
                 this.name = name;
                 transform.position = pos;
                 transform.rotation = rot;
@@ -165,7 +178,7 @@ namespace Oxide.Plugins
                     boxCollider.size = size;
                     bounds = boxCollider.bounds;
                     collider = boxCollider;
-                game.triggers.Add(this);
+                //game.triggers.Add(this);
             }
             public void deconstruct()
             {
@@ -313,9 +326,10 @@ namespace Oxide.Plugins
         {
             static Kit kit = kits[3][0];
             private Vector3 hubSpawn = new Vector3(42.6f, 45.0f, -232.7f);
-            private Vector3 triggerSpawn = new Vector3(42.6f, 38.0f, -232.7f);
+            //private Vector3 triggerSpawn = new Vector3(42.6f, 38.0f, -232.7f);
+            
             //private TriggerTemperature trigger;
-            public HubGame(Vector3 hubSpawn)
+            public HubGame(Vector3 hubSpawn, TriggerInfo[] triggerInfos)
             {
                 this.hubSpawn = hubSpawn;
                 //trigger = new TriggerTemperature() { triggerSize = 10.0f/*, enabled = true*/ };
@@ -324,7 +338,14 @@ namespace Oxide.Plugins
                 players = new List<BasePlayer>();
                 playerMax = 100;
                 triggers = new List<Trigger>();
-                CreateTrigger(new Vector3(50.0f, 10.0f, 50.0f), triggerSpawn/* - new Vector3(hubSpawn.x, hubSpawn.y - 4.0f, hubSpawn.z)*/, new Quaternion(), this, "PvPPit");
+                foreach (var triggerInfo in triggerInfos)
+                {
+                    triggers.Add(CreateTrigger(triggerInfo));
+                }
+                foreach(var trigger in triggers)
+                {
+                    trigger.game = this;
+                }
             }
             public override void playerLeaveGame(BasePlayer player)
             {
@@ -563,6 +584,36 @@ namespace Oxide.Plugins
             }
         }
 
+        public class redeemLR300 : redeem
+        {
+            public redeemLR300()
+            {
+                name = "lr300";
+                requirement = 4;
+            }
+            public override void givePlayerRedeem(BasePlayer player)
+            {
+                Item item = ItemManager.CreateByName("rifle.lr300", 1, 1621894466);
+                (item.GetHeldEntity() as BaseProjectile).primaryMagazine.contents = (item.GetHeldEntity() as BaseProjectile).primaryMagazine.capacity;
+                player.GiveItem(item);
+            }
+        }
+
+        public class redeemSuppresor : redeem
+        {
+            public redeemSuppresor()
+            {
+                name = "suppresor";
+                requirement = 3;
+            }
+            public override void givePlayerRedeem(BasePlayer player)
+            {
+                Item item = ItemManager.CreateByName("weapon.mod.silencer", 1);
+                //(item.GetHeldEntity() as BaseProjectile).primaryMagazine.contents = (item.GetHeldEntity() as BaseProjectile).primaryMagazine.capacity;
+                player.GiveItem(item);
+            }
+        }
+
         public class redeemM249 : redeem
         {
             public redeemM249()
@@ -618,7 +669,7 @@ namespace Oxide.Plugins
             public redeemGloves()
             {
                 name = "gloves";
-                requirement = 3;
+                requirement = 2;
             }
             public override void givePlayerRedeem(BasePlayer player)
             {
@@ -699,6 +750,13 @@ namespace Oxide.Plugins
             player.ChatMessage(Lang["NoUse"]);
         }
 
+        [ChatCommand("Game")]
+        void ccGame(BasePlayer player)
+        {
+            player.ChatMessage("You are currently in game " + getMinigamer(player).game.GameName + ".");
+            player.ChatMessage(Lang["NoUse"]);
+        }
+
         [ChatCommand("Join")]
         void ccJoin(BasePlayer player, string msg, string[] args)
         {
@@ -710,7 +768,7 @@ namespace Oxide.Plugins
                 {
                     if (args[0] == Game.GameName)
                     {
-                        if (Game == minigamer.game)
+                        if (Game != minigamer.game)
                         {
                             if (Game.isOpen)
                             {
@@ -720,10 +778,10 @@ namespace Oxide.Plugins
                             }
                             else player.ChatMessage(Lang["GameFull"]);
                         }
-                        else player.ChatMessage(Lang["InGame"]);
+                        else player.ChatMessage(string.Format(Lang["InGame"], Game.GameName));
                     }
                 }
-                player.ChatMessage(string.Format(Lang["BadGameName"], args[0]));
+                //player.ChatMessage(string.Format(Lang["BadGameName"], args[0]));
             }
             else
             {
@@ -749,10 +807,11 @@ namespace Oxide.Plugins
 
         #region Methods
 
-        static void CreateTrigger(Vector3 size, Vector3 pos, Quaternion rot, Game game, string name)
+        static Trigger CreateTrigger(TriggerInfo triggerInfo)
         {
             Trigger trigger = new GameObject().AddComponent<Trigger>();
-            trigger.InitTrigger(size, pos, rot, game, name);
+            trigger.InitTrigger(triggerInfo.size, triggerInfo.pos, triggerInfo.rot, triggerInfo.name);
+            return trigger;
         }
 
         static void Test()
@@ -817,7 +876,7 @@ namespace Oxide.Plugins
             {"DebugOff", "Debug mode disabled."},
             {"BadGameName", "Could not find game {0}, please try a different name. Do /Games to get a list of games."},
             {"NotInGame", "You are not currently in a game."},
-            {"InGame", "You are already in that game."},
+            {"InGame", "You are already in game {0}."},
             {"PlayerJoinedServer", "{0} has joined the server!"},
             {"PlayerLeftServer", "{0} has left the server."},
             {"GameFull", "That game is currently full."},
@@ -1084,7 +1143,7 @@ namespace Oxide.Plugins
         };
             Games = new List<Game>
             {
-                new HubGame(new Vector3(42.6f, 45.0f, -232.7f)),
+            new HubGame(new Vector3(42.6f, 45.0f, -232.7f), new TriggerInfo[] {new TriggerInfo(new Vector3(50.0f, 13.0f, 50.0f), new Vector3(42.6f, 38.0f, -232.7f), new Quaternion(), "PvPPit")}),
             new PvPGame(new Vector3[]
             {
                 new Vector3(-196.5f, 40.0f, -57.0f),
@@ -1119,20 +1178,28 @@ namespace Oxide.Plugins
 
         void Loaded()
         {
-            Puts("Loaded");
+            foreach (var player in BasePlayer.activePlayerList)
+            {
+                OnPlayerInit(player);
+            }
             //redeems = redeems.OrderByDescending(m => m.requirement).ToArray();
             //redeems.Reverse();
             
         }
-        void Unloaded()
+        void Unload()
         {
-            kits = null;
-            foreach(var game in Games)
+            //kits = null;
+            foreach (var game in Games)
             {
-                for(int i = 0; i >= game.triggers.Count; i++)
+                try
                 {
-                    game.triggers[i].deconstruct();
+                    for (int i = 0; i <= game.triggers.Count; i++)
+                    {
+                        game.triggers[i].deconstruct();
+                        Puts("Destroyed trigger");
+                    }
                 }
+                catch { }
             }
         }
 
@@ -1190,18 +1257,21 @@ namespace Oxide.Plugins
             }
         }
 
-        /*void OnPlayerInit(BasePlayer player)
+        void OnPlayerInit(BasePlayer player)
         {
             Minigamers.Add(new Minigamer(player, Games[0]));
-            //getMinigamer(player).game.playerJoinGame(player);
+            getMinigamer(player).game.playerJoinGame(player);
             PrintToChat(string.Format(Lang["PlayerJoinedServer"], player.displayName));
-        }*/
+            Puts("Player" + player.displayName +" joined server");
+            Puts(Minigamers.ToSentence());
+            
+        }
 
-        void OnPlayerSleepEnded(BasePlayer player)
+        /*void OnPlayerSleepEnded(BasePlayer player)
         {
             try
             {
-                getMinigamer(player);
+                
             }
             catch
             {
@@ -1209,13 +1279,16 @@ namespace Oxide.Plugins
                 PrintToChat(string.Format(Lang["PlayerJoinedServer"], player.displayName));
                 //getMinigamer(player).game.playerJoinGame(player);
             }
-        }
+            Puts(Minigamers.ToSentence());
+        }*/
 
         void OnPlayerDisconnected(BasePlayer player)
         {
             getMinigamer(player).game.playerLeaveGame(player);
             Minigamers.Remove(getMinigamer(player));
             PrintToChat(string.Format(Lang["PlayerLeftServer"], player.displayName));
+            Puts("Player" + player.displayName +" left server");
+            Puts(Minigamers.ToSentence());
         }
 
         void OnPlayerDie(BasePlayer player, HitInfo info)
@@ -1223,8 +1296,8 @@ namespace Oxide.Plugins
             try
             {
                 BasePlayer attacker = info.InitiatorPlayer;
-                //if (getMinigamer(attacker).game.GameName == "PvP" && getMinigamer(player).game.GameName == "PvP")
-                //{
+                if (getMinigamer(attacker).game.GameName == "PvP" && getMinigamer(player).game.GameName == "PvP")
+                {
                 int Kills;
                 if (attacker != player)
                 {
@@ -1254,7 +1327,7 @@ namespace Oxide.Plugins
                     }
                     writeData<int>(0, "MinigameData/PvPData/" + player.displayName + "K");
                 }
-                //}
+                }
             }
             catch
             {

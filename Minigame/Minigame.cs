@@ -686,6 +686,8 @@ namespace Oxide.Plugins
 
         static bool isDebug = false;
 
+        static bool isLoaded = false;
+
         public static Kit[][] kits;
 
         #endregion
@@ -753,8 +755,13 @@ namespace Oxide.Plugins
         [ChatCommand("Game")]
         void ccGame(BasePlayer player)
         {
-            player.ChatMessage("You are currently in game " + getMinigamer(player).game.GameName + ".");
-            player.ChatMessage(Lang["NoUse"]);
+            player.ChatMessage(string.Format(Lang["CurrentGame"], getMinigamer(player).game.GameName));
+        }
+
+        [ChatCommand("Games")]
+        void ccGames(BasePlayer player)
+        {
+            player.ChatMessage(string.Format(Lang["Games"], Games.ToSentence()));
         }
 
         [ChatCommand("Join")]
@@ -880,6 +887,8 @@ namespace Oxide.Plugins
             {"PlayerJoinedServer", "{0} has joined the server!"},
             {"PlayerLeftServer", "{0} has left the server."},
             {"GameFull", "That game is currently full."},
+            {"CurrentGame", "You are currently in game {0}."},
+            {"Games", "There are the following games: {0}."},
             //Survival
             {"DebugEnemyList", "The following are the entites in the enemies list: {0}."},
             {"DebugWave", "Starting Wave {0} in {1} seconds."},
@@ -1161,6 +1170,7 @@ namespace Oxide.Plugins
             {
                 Game.UpdatePlayers();
             }
+            isLoaded = true;
         }
 
         void OnPlayerHealthChange(BasePlayer player, float oldValue, float newValue)
@@ -1178,6 +1188,7 @@ namespace Oxide.Plugins
 
         void Loaded()
         {
+            if (!isLoaded) OnServerInitialized();
             foreach (var player in BasePlayer.activePlayerList)
             {
                 OnPlayerInit(player);
@@ -1259,6 +1270,7 @@ namespace Oxide.Plugins
 
         void OnPlayerInit(BasePlayer player)
         {
+            Minigamers.Clear();
             Minigamers.Add(new Minigamer(player, Games[0]));
             getMinigamer(player).game.playerJoinGame(player);
             PrintToChat(string.Format(Lang["PlayerJoinedServer"], player.displayName));

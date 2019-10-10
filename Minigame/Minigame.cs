@@ -283,6 +283,10 @@ namespace Oxide.Plugins
                 checkIsOpen();
                 broadcastToPlayers(string.Format(Lang["PlayerJoined"], player.displayName));
             }
+            virtual public void OnWeaponFired(BaseProjectile projectile, BasePlayer player)
+            {
+
+            }
             virtual public void initData(BasePlayer player)
             {
 
@@ -811,6 +815,12 @@ namespace Oxide.Plugins
             public override BasePlayer.SpawnPoint getPlayerSpawn()
             {
                 return new BasePlayer.SpawnPoint() { pos = GeneratePlayerSpawn(spawns), rot = new Quaternion() };
+            }
+            public override void OnWeaponFired(BaseProjectile projectile, BasePlayer player)
+            {
+                projectile.GetItem().condition = projectile.GetItem().info.condition.max;
+                projectile.primaryMagazine.contents = projectile.primaryMagazine.capacity;
+                projectile.SendNetworkUpdateImmediate();
             }
         }
 
@@ -1450,6 +1460,11 @@ namespace Oxide.Plugins
                 Game.UpdatePlayers();
             }
             isLoaded = true;
+        }
+
+        private void OnWeaponFired(BaseProjectile projectile, BasePlayer player)
+        {
+            getMinigamer(player).game.OnWeaponFired(projectile, player);
         }
 
         void OnPlayerHealthChange(BasePlayer player, float oldValue, float newValue)

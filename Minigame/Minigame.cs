@@ -60,8 +60,9 @@ namespace Oxide.Plugins
             Item[] weapons;
             Item[] misc;
             public string kitName;
+            bool giveAmmo;
             int stackDivision;
-            public Kit(Item[] attire, Item[] meds, Item[] weapons, Item[] misc, string kitName, int stackDivision = 1)
+            public Kit(Item[] attire, Item[] meds, Item[] weapons, Item[] misc, string kitName, int stackDivision = 1, bool giveAmmo = true)
             {
                 this.attire = attire;
                 this.meds = meds;
@@ -69,6 +70,7 @@ namespace Oxide.Plugins
                 this.misc = misc;
                 this.kitName = kitName;
                 this.stackDivision = stackDivision;
+                this.giveAmmo = giveAmmo;
             }
             public void givePlayerKit(BasePlayer player)
             {
@@ -86,8 +88,8 @@ namespace Oxide.Plugins
                     {
                         Item weapon = ItemManager.CreateByItemID(item.info.itemid, item.amount);
                         (weapon.GetHeldEntity() as BaseProjectile).primaryMagazine.contents = (weapon.GetHeldEntity() as BaseProjectile).primaryMagazine.capacity;
-                        weapon.MoveToContainer(player.inventory.containerBelt);
-                        player.GiveItem(ItemManager.CreateByItemID((weapon.GetHeldEntity() as BaseProjectile).primaryMagazine.ammoType.itemid, ItemManager.CreateByItemID((weapon.GetHeldEntity() as BaseProjectile).primaryMagazine.ammoType.itemid).MaxStackable() / stackDivision));
+                        player.GiveItem(weapon);
+                        if (giveAmmo == true) player.GiveItem(ItemManager.CreateByItemID((weapon.GetHeldEntity() as BaseProjectile).primaryMagazine.ammoType.itemid, ItemManager.CreateByItemID((weapon.GetHeldEntity() as BaseProjectile).primaryMagazine.ammoType.itemid).MaxStackable() / stackDivision));
                     }
 
                 }
@@ -249,6 +251,10 @@ namespace Oxide.Plugins
             {
                 return new Vector3();
             }
+            virtual public object OnNpcPlayerTarget(NPCPlayerApex npcPlayer, BaseEntity entity)
+            {
+                return null;
+            }
             virtual public void OnVendingTransaction(VendingMachine machine, BasePlayer buyer, int sellOrderId, int numberOfTransactions)
             {
 
@@ -261,11 +267,19 @@ namespace Oxide.Plugins
             {
 
             }
+            virtual public void OnWeaponFired(BaseProjectile projectile, BasePlayer player)
+            {
+
+            }
             virtual public BasePlayer.SpawnPoint getPlayerSpawn()
             {
                 return new BasePlayer.SpawnPoint() { pos = new Vector3(), rot = new Quaternion() };
             }
             virtual public void runCmd(BasePlayer player, string cmd, string[] args)
+            {
+
+            }
+            virtual public void init()
             {
 
             }
@@ -383,6 +397,7 @@ namespace Oxide.Plugins
                 player.metabolism.bleeding = new MetabolismAttribute { value = 0.0f };
                 player.Teleport(hubSpawn);
                 sendDebug("Player joined hub");
+                player.SendNetworkUpdateImmediate();
             }
             public override void OnPlayerRespawn(BasePlayer player)
             {
@@ -527,6 +542,7 @@ namespace Oxide.Plugins
                 player.inventory.Strip();
                 player.Heal(100.0f - player.health);
                 kits[2][getMinigamer(player).Class].givePlayerKit(player);
+                player.SendNetworkUpdateImmediate();
             }
             public override void OnPlayerDie(BasePlayer player, HitInfo info)
             {
@@ -663,6 +679,7 @@ namespace Oxide.Plugins
                 player.inventory.Strip();
                 player.Heal(100.0f - player.health);
                 minigame.joinStart(this);
+                player.SendNetworkUpdateImmediate();
             }
             public override void playerLeaveGame(BasePlayer player)
             {
@@ -769,20 +786,46 @@ namespace Oxide.Plugins
 
         public class AimGame : Game
         {
-            static Kit kit = kits[6][0];
+            static Kit kit = kits[5][0];
             private Vector3[] spawns;
+            private int botCount;
             //private Vector3 hubSpawn = new Vector3(42.6f, 45.0f, -232.7f);
             //private Vector3 triggerSpawn = new Vector3(42.6f, 38.0f, -232.7f);
 
             //private TriggerTemperature trigger;
-            public AimGame(Vector3[] spawns)
+            public AimGame(Vector3[] spawns, int botCount)
             {
+                this.botCount = botCount;
                 this.spawns = spawns;
                 //trigger = new TriggerTemperature() { triggerSize = 10.0f/*, enabled = true*/ };
                 //trigger.transform.position = hubSpawn;
                 GameName = "Aim";
                 players = new List<BasePlayer>();
                 playerMax = 100;
+            }
+            private void spawnBots()
+            {
+                sendDebug("test1");
+                for (int i = 0; i < botCount; i++)
+                {
+                    sendDebug("test2");
+                    var entity = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", GeneratePlayerSpawn(spawns), new Quaternion(), true);
+                    sendDebug("test3");
+                    //(entity as BasePlayer).inventory.Strip();
+                    sendDebug("test4");
+                    entity.Spawn();
+                    sendDebug("init bot aim");
+                }
+            }
+            public override void init()
+            {
+                sendDebug("init aim");
+                spawnBots();
+            }
+            public override object OnNpcPlayerTarget(NPCPlayerApex npcPlayer, BaseEntity entity)
+            {
+                sendDebug("npc target");
+                return true;
             }
             public override void playerLeaveGame(BasePlayer player)
             {
@@ -801,7 +844,15 @@ namespace Oxide.Plugins
                 player.Heal(100.0f);
                 player.metabolism.bleeding = new MetabolismAttribute { value = 0.0f };
                 player.Teleport(GeneratePlayerSpawn(spawns));
+                kit.givePlayerKit(player);
+                player.SendNetworkUpdateImmediate();
                 sendDebug("Player joined aim");
+            }
+            public override void OnWeaponFired(BaseProjectile projectile, BasePlayer player)
+            {
+                projectile.GetItem().condition = projectile.GetItem().info.condition.max;
+                projectile.primaryMagazine.contents = projectile.primaryMagazine.capacity;
+                projectile.SendNetworkUpdateImmediate();
             }
             public override void OnPlayerRespawn(BasePlayer player)
             {
@@ -946,11 +997,13 @@ namespace Oxide.Plugins
                 if (isDebug)
                 {
                     isDebug = false;
+                    writeData<bool>(isDebug, "MinigameData/General/isDebug");
                     player.ChatMessage(Lang["DebugOff"]);
                 }
                 else
                 {
                     isDebug = true;
+                    writeData<bool>(isDebug, "MinigameData/General/isDebug");
                     player.ChatMessage(Lang["DebugOn"]);
                 }
                 return;
@@ -1221,7 +1274,15 @@ namespace Oxide.Plugins
                 bounds = boxCollider.bounds;
                 collider = boxCollider;
             }*/
-
+            try
+            {
+                isDebug = readData<bool>("MinigameData/General/isDebug");
+            }
+            catch
+            {
+                writeData<bool>(true, "MinigameData/General/isDebug");
+                isDebug = readData<bool>("MinigameData/General/isDebug");
+            }
             kits = new Kit[][]
 {
             //Level-1
@@ -1415,7 +1476,20 @@ namespace Oxide.Plugins
                 "Scout",
                 2
             )
-        }
+        },
+            new Kit[]
+            {
+                new Kit
+                (
+                    new Item[] {ItemManager.CreateByName("", 1)},
+                    new Item[] {ItemManager.CreateByName("", 1)},
+                    new Item[] {ItemManager.CreateByName("rifle.ak", 1), ItemManager.CreateByName("rifle.lr300", 1), ItemManager.CreateByName("rifle.bolt", 1), ItemManager.CreateByName("lmg.m249", 1), ItemManager.CreateByName("shotgun.spas12", 1), ItemManager.CreateByName("smg.mp5", 1), ItemManager.CreateByName("rifle.m39", 1), ItemManager.CreateByName("pistol.m92", 1), ItemManager.CreateByName("pistol.python", 1), ItemManager.CreateByName("crossbow", 1), ItemManager.CreateByName("rifle.semiauto", 1), ItemManager.CreateByName("smg.thompson", 1), ItemManager.CreateByName("shotgun.pump", 1), ItemManager.CreateByName("smg.2", 1), ItemManager.CreateByName("bow.hunting", 1)},
+                    new Item[] {ItemManager.CreateByName("", 1)},
+                    "Aim",
+                    1,
+                    false
+                )
+            }
 };
 
             redeems = new redeem[]
@@ -1438,8 +1512,9 @@ namespace Oxide.Plugins
                 new Vector3(-231.7f, 40.3f, -105.9f),
                 new Vector3(-186.6f, 40.3f, -74.3f),
             }),
-            new SurvivalGame(new Vector3(-19.8f, 45.0f, 36.4f), new Vector3(-32.4f, 47.8f, 21.7f), new Vector3[]{ new Vector3(-42.3f, 40.3f, 23.4f), new Vector3(-30.6f, 40.3f, 11.6f), new Vector3(-23.9f, 40.4f, 28.2f) }, new Buyable[]{new Buyable(new Vector3(-25.0f, 40.0f, 23.0f), new Quaternion(0.0f, 0.0f, 0.0f, 1.0f)), new Buyable(new Vector3(-25.0f, 40.0f, 24.3f), new Quaternion(0.0f, 0.0f, 0.0f, 1.0f))})
-    };
+            new SurvivalGame(new Vector3(-19.8f, 45.0f, 36.4f), new Vector3(-32.4f, 47.8f, 21.7f), new Vector3[]{ new Vector3(-42.3f, 40.3f, 23.4f), new Vector3(-30.6f, 40.3f, 11.6f), new Vector3(-23.9f, 40.4f, 28.2f) }, new Buyable[]{new Buyable(new Vector3(-25.0f, 40.0f, 23.0f), new Quaternion(0.0f, 0.0f, 0.0f, 1.0f)), new Buyable(new Vector3(-25.0f, 40.0f, 24.3f), new Quaternion(0.0f, 0.0f, 0.0f, 1.0f))}),
+            new AimGame(new Vector3[] { new Vector3(-168.6f, 46.4f, 155.3f), new Vector3(-277.0f, 45.5f, 154.7f), new Vector3(-229.5f, 46.6f, 82.1f), new Vector3(-161.5f, 47.5f, 36.2f), new Vector3(-287.3f, 44.7f, 38.6f), new Vector3(-230.3f, 44.7f, 62.2f), new Vector3(-205.0f, 45.8f, 138.6f), new Vector3(-255.9f, 43.1f, 143.8f), new Vector3(-189.7f, 41.9f, 69.9f)}, 10)
+        };
             Minigamers.Clear();
             foreach (var player in BasePlayer.activePlayerList)
             {
@@ -1447,9 +1522,29 @@ namespace Oxide.Plugins
             }
             foreach (var Game in Games)
             {
+                Game.init();
                 Game.UpdatePlayers();
             }
             isLoaded = true;
+        }
+
+        private void OnWeaponFired(BaseProjectile projectile, BasePlayer player)
+        {
+            getMinigamer(player).game.OnWeaponFired(projectile, player);
+        }
+
+        object OnNPCPlayerTarget(NPCPlayerApex npcPlayer, BaseEntity entity)
+        {
+            /*sendDebug("pp");
+            try
+            {
+                sendDebug("pp1");
+                return getMinigamer(entity as BasePlayer).game.OnNpcPlayerTarget(npcPlayer, entity);
+            }
+            catch { sendDebug("ppoof"); }*/
+            //if (entity is BasePlayer)
+            return true;
+            //
         }
 
         void OnPlayerHealthChange(BasePlayer player, float oldValue, float newValue)

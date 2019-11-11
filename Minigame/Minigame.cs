@@ -189,6 +189,29 @@ namespace Oxide.Plugins
             }
         }
 
+        /*public class Enemy
+        {
+            public bool isInvulnerable = false;
+            public static List<BaseEntity> enemies = new List<BaseEntity>();
+            public BaseEntity enemy;
+            public Game game = null;
+            public Enemy(BaseEntity enemy, Game game)
+            {
+                this.game = game;
+                this.enemy = enemy;
+                enemies.Add(enemy);
+            }
+            ~Enemy()
+            {
+                enemies.Remove(enemy);
+            }
+            public Vector3 getSpawn()
+            {
+                //Test();
+                return game.getEnemySpawn();
+            }
+        }*/
+
         public class Minigamer
         {
             //General
@@ -239,6 +262,7 @@ namespace Oxide.Plugins
             public List<Trigger> triggers;
             public string GameName;
             public List<BasePlayer> players = new List<BasePlayer>();
+            public List<BaseEntity> enemies = new List<BaseEntity>();
             public int playerMax;
             public bool isOpen = true;
             public bool isGame = false;
@@ -247,9 +271,22 @@ namespace Oxide.Plugins
                 Random rand = new Random();
                 return spawns[rand.Next(spawns.Length)];
             }
+            public Vector3 GeneratePlayerSpawnArea(Vector3 PointA, Vector3 PointB)
+            {
+                Random rand = new Random();
+                //return spawns[rand.Next(spawns.Length)];
+                return new Vector3(
+                    rand.Next(int.Parse(PointA.x.ToString()), int.Parse(PointB.x.ToString())), 
+                    rand.Next(int.Parse(PointA.y.ToString()), int.Parse(PointB.y.ToString())), 
+                    rand.Next(int.Parse(PointA.z.ToString()), int.Parse(PointB.z.ToString())));
+            }
             virtual public Vector3 getSpawn()
             {
                 return new Vector3();
+            }
+            virtual public object OnNpcStopMoving(NPCPlayerApex npc)
+            {
+                return null;
             }
             virtual public object OnNpcPlayerTarget(NPCPlayerApex npcPlayer, BaseEntity entity)
             {
@@ -274,6 +311,10 @@ namespace Oxide.Plugins
             virtual public BasePlayer.SpawnPoint getPlayerSpawn()
             {
                 return new BasePlayer.SpawnPoint() { pos = new Vector3(), rot = new Quaternion() };
+            }
+            virtual public Vector3 getEnemySpawn()
+            {
+                return new Vector3();
             }
             virtual public void runCmd(BasePlayer player, string cmd, string[] args)
             {
@@ -603,7 +644,7 @@ namespace Oxide.Plugins
             public SurvivalGame(Vector3 hubPos, Vector3 startPos, Vector3[] zombiePos, Buyable[] buyables)
             {
                 minPop = 1;
-                Enemies = new List<BaseEntity>();
+                enemies = new List<BaseEntity>();
                 GameName = "Survival";
                 players = new List<BasePlayer>();
                 playerMax = 8;
@@ -659,9 +700,9 @@ namespace Oxide.Plugins
                 }
                 try
                 {
-                    for (int i = 0; i <= Enemies.Count; i++)
+                    for (int i = 0; i <= enemies.Count; i++)
                     {
-                        Enemies[i].ToPlayer().DieInstantly();
+                        enemies[i].ToPlayer().DieInstantly();
                     }
                 }
                 catch { }
@@ -687,6 +728,10 @@ namespace Oxide.Plugins
                 alivePlayers.Remove(player);
                 checkIsPlayersDead();
             }
+            public override object OnNpcStopMoving(NPCPlayerApex npc)
+            {
+                return true;
+            }
             public override void OnPlayerDie(BasePlayer player, HitInfo info)
             {
                 if (isGame)
@@ -700,7 +745,7 @@ namespace Oxide.Plugins
                             return;
                         }
                     }
-                    Enemies.Remove(player);
+                    enemies.Remove(player);
                     checkIsEnemiesDead();
                 }
             }
@@ -714,11 +759,11 @@ namespace Oxide.Plugins
                 waveCount += 1;
                 broadcastToPlayers(string.Format(Lang["NewWave"], waveCount));
                 spawnEnemies();
-                sendDebug(string.Format(Lang["DebugEnemyList"], Enemies.ToSentence()));
+                sendDebug(string.Format(Lang["DebugEnemyList"], enemies.ToSentence()));
             }
             void checkIsEnemiesDead()
             {
-                if (Enemies.Count == 0)
+                if (enemies.Count == 0)
                 {
                     minigame.RunGame(45f, this);
                 }
@@ -755,9 +800,9 @@ namespace Oxide.Plugins
                         Enemies.Add(enemy2);
                         Enemies.Add(GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", zombiePos[0], new Quaternion(), true));
                         Enemies[Enemies.Count - 1].Spawn();*/
-                        Enemies.Add(new BaseEntity());
-                        Enemies[Enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", zombiePos[2], new Quaternion(), true);
-                        Enemies[Enemies.Count - 1].Spawn();
+                        enemies.Add(new BaseEntity());
+                        enemies[enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", zombiePos[2], new Quaternion(), true);
+                        enemies[enemies.Count - 1].Spawn();
                     }
                     else if (i % 2 == 0)
                     {
@@ -766,9 +811,9 @@ namespace Oxide.Plugins
                         Enemies.Add(enemy2);
                         Enemies.Add(GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", EnemyPos1, new Quaternion(), true));
                         Enemies[Enemies.Count - 1].Spawn();*/
-                        Enemies.Add(new BaseEntity());
-                        Enemies[Enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", zombiePos[1], new Quaternion(), true);
-                        Enemies[Enemies.Count - 1].Spawn();
+                        enemies.Add(new BaseEntity());
+                        enemies[enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", zombiePos[1], new Quaternion(), true);
+                        enemies[enemies.Count - 1].Spawn();
                     }
                     else//(i % 1 == 0) else
                     {
@@ -776,9 +821,9 @@ namespace Oxide.Plugins
                         enemy.Spawn();
                         Enemies.Add(enemy);
                         new BaseEntity();*/
-                        Enemies.Add(new BaseEntity());
-                        Enemies[Enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", zombiePos[0], new Quaternion(), true);
-                        Enemies[Enemies.Count - 1].Spawn();
+                        enemies.Add(new BaseEntity());
+                        enemies[enemies.Count - 1] = GameManager.server.CreateEntity("assets/prefabs/npc/murderer/murderer.prefab", zombiePos[0], new Quaternion(), true);
+                        enemies[enemies.Count - 1].Spawn();
                     }
                 }
             }
@@ -802,6 +847,7 @@ namespace Oxide.Plugins
                 GameName = "Aim";
                 players = new List<BasePlayer>();
                 playerMax = 100;
+                enemies = new List<BaseEntity>();
             }
             private void spawnBots()
             {
@@ -814,6 +860,8 @@ namespace Oxide.Plugins
                     //(entity as BasePlayer).inventory.Strip();
                     sendDebug("test4");
                     entity.Spawn();
+                    sendDebug("test5");
+                    enemies.Add(entity);
                     sendDebug("init bot aim");
                 }
             }
@@ -821,6 +869,11 @@ namespace Oxide.Plugins
             {
                 sendDebug("init aim");
                 spawnBots();
+            }
+            public override object OnNpcStopMoving(NPCPlayerApex npc)
+            {
+                sendDebug("npc try stop");
+                return true;
             }
             public override object OnNpcPlayerTarget(NPCPlayerApex npcPlayer, BaseEntity entity)
             {
@@ -854,6 +907,10 @@ namespace Oxide.Plugins
                 projectile.primaryMagazine.contents = projectile.primaryMagazine.capacity;
                 projectile.SendNetworkUpdateImmediate();
             }
+            public override void OnPlayerDie(BasePlayer player, HitInfo info)
+            {
+                base.OnPlayerDie(player, info);
+            }
             public override void OnPlayerRespawn(BasePlayer player)
             {
                 player.inventory.Strip();
@@ -862,6 +919,43 @@ namespace Oxide.Plugins
             public override BasePlayer.SpawnPoint getPlayerSpawn()
             {
                 return new BasePlayer.SpawnPoint() { pos = GeneratePlayerSpawn(spawns), rot = new Quaternion() };
+            }
+        }
+
+        public class BuildGame : Game
+        {
+            Kit kit = kits[0][1];
+            public BuildGame(TriggerInfo[] triggerInfos)
+            {
+                GameName = "Build";
+                players = new List<BasePlayer>();
+                playerMax = 100;
+                triggers = new List<Trigger>();
+                foreach (var triggerInfo in triggerInfos)
+                {
+                    triggers.Add(CreateTrigger(triggerInfo));
+                }
+                foreach (var trigger in triggers)
+                {
+                    trigger.game = this;
+                }
+            }
+
+            public override void playerJoinGame(BasePlayer player)
+            {
+                getMinigamer(player).isInvulnerable = true;
+                players.Add(player);
+                UpdatePlayers();
+                checkIsOpen();
+                player.inventory.Strip();
+                player.Heal(100.0f);
+                player.metabolism.bleeding = new MetabolismAttribute { value = 0.0f };
+                //player.Teleport(GeneratePlayerSpawnArea(triggers[0].bounds.extents, triggers[0].bounds.extents));
+                //broken
+                player.Teleport(triggers[0].transform.position);
+                kit.givePlayerKit(player);
+                player.SendNetworkUpdateImmediate();
+                sendDebug("Player joined build");
             }
         }
 
@@ -977,7 +1071,7 @@ namespace Oxide.Plugins
         #region Variables
 
         private static List<Minigamer> Minigamers = new List<Minigamer>();
-        List<Game> Games;
+        static List<Game> Games;
 
         static bool isDebug = false;
 
@@ -1181,6 +1275,18 @@ namespace Oxide.Plugins
             return null;
         }
 
+        private static Game getGameByEnemy(BaseEntity entity)
+        {
+            foreach(var Game in Games)
+            {
+                foreach(var enemy in Game.enemies)
+                {
+                    if (enemy == entity) return Game;
+                }
+            }
+            return null;
+        }
+
         bool isInGame(BasePlayer player)
         {
             foreach (var Minigamer in Minigamers)
@@ -1299,9 +1405,9 @@ namespace Oxide.Plugins
             new Kit
             (
                 new Item[] { /*ItemManager.CreateByName("", 1)*/ },
-                new Item[] { ItemManager.CreateByName("bandage", 3) },
+                new Item[] { /*ItemManager.CreateByName("bandage", 3)*/ },
                 new Item[] { /*ItemManager.CreateByName("", 1)*/ },
-                new Item[] { /*ItemManager.CreateByName("", 1)*/  },
+                new Item[] { ItemManager.CreateByName("wood", 999999), ItemManager.CreateByName("stones", 999999), ItemManager.CreateByName("metal.fragments", 999999), ItemManager.CreateByName("metal.refined", 999999), ItemManager.CreateByName("building.planner", 1), ItemManager.CreateByName("hammer", 1) },
                 "CQB",
                 4
             ),
@@ -1513,7 +1619,8 @@ namespace Oxide.Plugins
                 new Vector3(-186.6f, 40.3f, -74.3f),
             }),
             new SurvivalGame(new Vector3(-19.8f, 45.0f, 36.4f), new Vector3(-32.4f, 47.8f, 21.7f), new Vector3[]{ new Vector3(-42.3f, 40.3f, 23.4f), new Vector3(-30.6f, 40.3f, 11.6f), new Vector3(-23.9f, 40.4f, 28.2f) }, new Buyable[]{new Buyable(new Vector3(-25.0f, 40.0f, 23.0f), new Quaternion(0.0f, 0.0f, 0.0f, 1.0f)), new Buyable(new Vector3(-25.0f, 40.0f, 24.3f), new Quaternion(0.0f, 0.0f, 0.0f, 1.0f))}),
-            new AimGame(new Vector3[] { new Vector3(-168.6f, 46.4f, 155.3f), new Vector3(-277.0f, 45.5f, 154.7f), new Vector3(-229.5f, 46.6f, 82.1f), new Vector3(-161.5f, 47.5f, 36.2f), new Vector3(-287.3f, 44.7f, 38.6f), new Vector3(-230.3f, 44.7f, 62.2f), new Vector3(-205.0f, 45.8f, 138.6f), new Vector3(-255.9f, 43.1f, 143.8f), new Vector3(-189.7f, 41.9f, 69.9f)}, 10)
+            new AimGame(new Vector3[] { new Vector3(-168.6f, 46.4f, 155.3f), new Vector3(-277.0f, 45.5f, 154.7f), new Vector3(-229.5f, 46.6f, 82.1f), new Vector3(-161.5f, 47.5f, 36.2f), new Vector3(-287.3f, 44.7f, 38.6f), new Vector3(-230.3f, 44.7f, 62.2f), new Vector3(-205.0f, 45.8f, 138.6f), new Vector3(-255.9f, 43.1f, 143.8f), new Vector3(-189.7f, 41.9f, 69.9f)}, 10),
+            new BuildGame(new TriggerInfo[]{new TriggerInfo(new Vector3(20.0f, 20.0f, 20.0f), new Vector3(-30.0f, 40.0f, -140.0f), new Quaternion(), "BuildArea") })
         };
             Minigamers.Clear();
             foreach (var player in BasePlayer.activePlayerList)
@@ -1532,9 +1639,16 @@ namespace Oxide.Plugins
         {
             getMinigamer(player).game.OnWeaponFired(projectile, player);
         }
-
-        object OnNPCPlayerTarget(NPCPlayerApex npcPlayer, BaseEntity entity)
+        /*object OnNpcStopMoving(NPCPlayerApex npc)
         {
+            sendDebug("try stop moving");
+            return getGameByEnemy(npc as BaseEntity).OnNpcStopMoving(npc);
+            //return null;
+        }*/
+        object OnNPCPlayerTarget(NPCPlayerApex npc, BaseEntity entity)
+        {
+            sendDebug("Player target");
+            return getGameByEnemy(npc as BaseEntity).OnNpcPlayerTarget(npc, entity);
             /*sendDebug("pp");
             try
             {
@@ -1543,7 +1657,7 @@ namespace Oxide.Plugins
             }
             catch { sendDebug("ppoof"); }*/
             //if (entity is BasePlayer)
-            return true;
+            //return true;
             //
         }
 

@@ -218,6 +218,7 @@ namespace Oxide.Plugins
             public bool isInvulnerable = false;
             public static List<BasePlayer> players = new List<BasePlayer>();
             public BasePlayer player;
+            public int status;
             public Game game = null;
             //PvP
             //public Kit kit;
@@ -293,6 +294,10 @@ namespace Oxide.Plugins
                 return null;
             }
             virtual public void OnVendingTransaction(VendingMachine machine, BasePlayer buyer, int sellOrderId, int numberOfTransactions)
+            {
+
+            }
+            virtual public void OnMaxStackable(Item item)
             {
 
             }
@@ -1077,32 +1082,68 @@ namespace Oxide.Plugins
 
         static bool isLoaded = false;
 
+        static PlayerInventory playerInventory = new PlayerInventory();
+
         public static Kit[][] kits;
 
         #endregion
 
         #region Commands
 
+        [ChatCommand("SetStatus")]
+        void ccSetStatus(BasePlayer player, string msg, string[] args)
+        {
+            if (!player.IsAdmin)
+            {
+                player.ChatMessage(Lang["NoUse"]);
+                return;
+            }
+            int x;
+            if (args.Length == 2)
+            {
+                if (int.TryParse(args[1], out x))
+                {
+                    foreach (var person in BasePlayer.activePlayerList)
+                    {
+                        if (person.displayName == args[0])
+                        {
+                            getMinigamer(person).status = x;
+                            player.ChatMessage(string.Format(Lang["SetStatus"], person.displayName, x.ToString()));
+                        }
+                    }
+                }
+            }
+            else if (args.Length == 1)
+            {
+                if (int.TryParse(args[0], out x))
+                {
+                    getMinigamer(player).status = x;
+                    player.ChatMessage(string.Format(Lang["SetStatus"], player.displayName, x.ToString()));
+                }
+            }
+            else player.ChatMessage(Lang["BadArgs"]);
+        }
+
         [ChatCommand("Debug")]
         void ccDebug(BasePlayer player)
         {
-            if (player.IsAdmin)
+            if (!player.IsAdmin)
             {
-                if (isDebug)
-                {
-                    isDebug = false;
-                    writeData<bool>(isDebug, "MinigameData/General/isDebug");
-                    player.ChatMessage(Lang["DebugOff"]);
-                }
-                else
-                {
-                    isDebug = true;
-                    writeData<bool>(isDebug, "MinigameData/General/isDebug");
-                    player.ChatMessage(Lang["DebugOn"]);
-                }
+                player.ChatMessage(Lang["NoUse"]);
                 return;
             }
-            player.ChatMessage(Lang["NoUse"]);
+            if (isDebug)
+            {
+                isDebug = false;
+                writeData<bool>(isDebug, "MinigameData/General/isDebug");
+                player.ChatMessage(Lang["DebugOff"]);
+            }
+            else
+            {
+                isDebug = true;
+                writeData<bool>(isDebug, "MinigameData/General/isDebug");
+                player.ChatMessage(Lang["DebugOn"]);
+            }
         }
 
         [ChatCommand("Test")]
@@ -1194,6 +1235,7 @@ namespace Oxide.Plugins
                 player.ChatMessage(Lang["BadArgs"]);
             }
         }
+
         [ChatCommand("Leave")]
         void ccLeave(BasePlayer player, string msg, string[] args)
         {
@@ -1323,6 +1365,7 @@ namespace Oxide.Plugins
             {"CurrentGame", "You are currently in game {0}."},
             {"Games", "There are the following games: {0}."},
             {"60ToStart", "Game will start in 60 seconds."},
+            {"SetStatus", "Set {0}'s status to {1}."},
             //Survival
             {"DebugEnemyList", "The following are the entites in the enemies list: {0}."},
             {"DebugWave", "Starting Wave {0} in {1} seconds."},
@@ -1635,6 +1678,32 @@ namespace Oxide.Plugins
             isLoaded = true;
         }
 
+        /*object CanMoveItem(Item item, PlayerInventory playerLoot, uint targetContainer, int targetSlot, int amount)
+        {
+            Puts("Test1");
+            playerInventory = playerLoot;
+            Puts("Test2" + playerInventory.ToString() + " : " + playerInventory.GetComponent<BasePlayer>().displayName);
+            return null;
+        }*/
+        /*int OnMaxStackable(Item item)
+        {
+            Puts("Test3 : " + item.name + " : " + item.GetOwnerPlayer().displayName);
+            try
+            {
+                if (!(getMinigamer(item.GetOwnerPlayer()).game is BuildGame))
+                {
+                    Puts("Test4");
+                    return item.MaxStackable();
+                }
+                Puts("Test5");
+                return 999999;
+            }
+            catch
+            {
+                Puts("Test6");
+                return item.MaxStackable();
+            }
+        }*/
         private void OnWeaponFired(BaseProjectile projectile, BasePlayer player)
         {
             getMinigamer(player).game.OnWeaponFired(projectile, player);

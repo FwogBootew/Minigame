@@ -21,19 +21,6 @@ namespace Oxide.Plugins
     [Description("A Minigame plugin for Rust.")]
     public class Minigame : RustPlugin
     {
-        /*
-         * BaseEntity baseEntity = col?.ToBaseEntity();
-                if (!baseEntity.IsValid())
-                    return;
-
-                if (baseEntity is BasePlayer)
-                {
-                    Instance.OnPlayerEnterZone(baseEntity as BasePlayer, this);
-                    return;
-                }
-
-                Instance.OnEntityEnterZone(baseEntity, this);
-                */
         #region General
 
         #region Structs
@@ -1394,35 +1381,7 @@ namespace Oxide.Plugins
 
         void OnServerInitialized()
         {
-            //
-            /*private Rigidbody rigidbody;
-
-            internal Collider collider;
-
-            internal Bounds bounds;
-            rigidbody = gameObject.AddComponent<Rigidbody>();
-            rigidbody.useGravity = false;
-            rigidbody.isKinematic = true;
-            rigidbody.detectCollisions = true;
-            rigidbody.collisionDetectionMode = CollisionDetectionMode.Discrete;
-
-            SphereCollider sphereCollider = gameObject.GetComponent<SphereCollider>();
-            BoxCollider boxCollider = gameObject.GetComponent<BoxCollider>();
-
-            if (definition.Size != Vector3.zero)
-            {
-                if (sphereCollider != null)
-                    Destroy(sphereCollider);
-
-                if (boxCollider == null)
-                {
-                    boxCollider = gameObject.AddComponent<BoxCollider>();
-                    boxCollider.isTrigger = true;
-                }
-                boxCollider.size = definition.Size;
-                bounds = boxCollider.bounds;
-                collider = boxCollider;
-            }*/
+            
             try
             {
                 isDebug = readData<bool>("MinigameData/General/isDebug");
